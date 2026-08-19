@@ -43,7 +43,7 @@ export default function Dashboard() {
           </h1>
         </div>
         <Chip tone={live ? "success" : "neutral"} pulse={live}>
-          <span className="text-[13px]">
+          <span className="live-state">
             {live ? "Connected" : "Disconnected"}
           </span>
         </Chip>

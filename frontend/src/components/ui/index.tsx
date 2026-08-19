@@ -93,15 +93,20 @@ export function Button({
 export type ChipTone =
   "success" | "warn" | "danger" | "info" | "primary" | "neutral" | "violet";
 
-const TONE: Record<ChipTone, { bg: string; fg: string }> = {
-  success: { bg: "#e0f7f1", fg: "#00785f" },
-  warn: { bg: "#fff1dc", fg: "#a26302" },
-  danger: { bg: "#fde4e8", fg: "#b32a44" },
-  info: { bg: "#e6efff", fg: "#2a55ab" },
-  primary: { bg: "var(--primary-100)", fg: "var(--primary)" },
-  neutral: { bg: "var(--line-2)", fg: "var(--muted)" },
-  violet: { bg: "#efecfd", fg: "#5b4bc4" },
-};
+/* Values live in tokens.css (§3 pairings) — never a hex in a component. */
+const TONE: Record<ChipTone, { bg: string; fg: string }> = Object.fromEntries(
+  (
+    [
+      "success",
+      "warn",
+      "danger",
+      "info",
+      "primary",
+      "neutral",
+      "violet",
+    ] as ChipTone[]
+  ).map((t) => [t, { bg: `var(--chip-${t}-bg)`, fg: `var(--chip-${t}-fg)` }]),
+) as Record<ChipTone, { bg: string; fg: string }>;
 
 export function Chip({
   tone = "neutral",
@@ -153,7 +158,8 @@ export function PresenceChip({
   return (
     <span className="inline-flex items-center gap-2">
       <Chip tone={PRESENCE_TONE[state] ?? "neutral"}>
-        <span className="text-[13px] capitalize">{label}</span>
+        {/* §9a beats §6's 11px chip default: judges read this from ~3m */}
+        <span className="live-state capitalize">{label}</span>
       </Chip>
       {/* low confidence is shown, never hidden behind an optimistic colour (§9d) */}
       {confidence !== undefined && confidence < 0.6 && (

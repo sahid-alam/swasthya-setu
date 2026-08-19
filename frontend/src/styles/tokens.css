@@ -92,6 +92,29 @@
   --st-away: var(--color-warn);
   --st-unknown: var(--color-muted-2);
 
+  /* §3 chip pairings: soft background + dark text, never solid. The only place
+     these hexes exist — components reference the token, never the value. */
+  --chip-success-bg: #e0f7f1;
+  --chip-success-fg: #00785f;
+  --chip-warn-bg: #fff1dc;
+  --chip-warn-fg: #a26302;
+  --chip-danger-bg: #fde4e8;
+  --chip-danger-fg: #b32a44;
+  --chip-info-bg: #e6efff;
+  --chip-info-fg: #2a55ab;
+  --chip-primary-bg: var(--color-primary-100);
+  --chip-primary-fg: var(--color-primary);
+  --chip-neutral-bg: var(--color-line-2);
+  --chip-neutral-fg: var(--color-muted);
+  /* IN_SURGERY: §9d names --st-surgery but gives no pairing, so this is the
+     §3 formula applied to it — soft tint of the same violet, darkened text. */
+  --chip-violet-bg: #efecfd;
+  --chip-violet-fg: #5b4bc4;
+
+  /* §9a projector rule: live-state text is legible from ~3m. Overrides the
+     11px chip default from §6 wherever a chip carries live state. */
+  --live-state-size: 15px;
+
   --focus-ring: 0 0 0 3px rgba(15, 76, 129, 0.1);
 }
 
@@ -111,6 +134,12 @@ body {
 .tnum {
   font-family: var(--font-mono);
   font-feature-settings: "tnum";
+}
+
+/* §9a projector rule: presence states, queue counts and alerts stay readable
+   from ~3m. Overrides §6's 11px chip text wherever a chip carries live state. */
+.live-state {
+  font-size: var(--live-state-size);
 }
 
 /* --- motion utilities (§5) ------------------------------------------------ */

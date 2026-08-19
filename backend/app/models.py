@@ -28,8 +28,12 @@ def pg_enum(enum_cls: type[Enum], name: str) -> SAEnum:
     return SAEnum(enum_cls, name=name, create_type=False)
 
 
-def fk(target: str, **kw) -> Mapped[uuid.UUID]:
-    return mapped_column(UUID(as_uuid=True), ForeignKey(target, ondelete="CASCADE"), **kw)
+def fk(target: str, ondelete: str | None = None, **kw) -> Mapped[uuid.UUID]:
+    """A nullable FK is an optional relationship, so losing the target clears the
+    reference; a required one means the row is owned and follows its parent.
+    Deleting a bed must not delete the referral that once reserved it."""
+    ondelete = ondelete or ("SET NULL" if kw.get("nullable") else "CASCADE")
+    return mapped_column(UUID(as_uuid=True), ForeignKey(target, ondelete=ondelete), **kw)
 
 
 # --------------------------------------------------------------------------- enums
@@ -344,7 +348,9 @@ class Appointment(Base):
         Index("ix_appointments_patient_status", "patient_id", "status"),
     )
     patient_id: Mapped[uuid.UUID] = fk("patients.id")
-    slot_id: Mapped[uuid.UUID] = fk("slots.id")
+    # RESTRICT: a replan rewrites slots, and it must not take booked appointments
+    # (or the rescheduled_from chain behind them) down with it.
+    slot_id: Mapped[uuid.UUID] = fk("slots.id", ondelete="RESTRICT")
     hospital_id: Mapped[uuid.UUID] = fk("hospitals.id")
     department_id: Mapped[uuid.UUID] = fk("departments.id")
     channel: Mapped[Channel] = mapped_column(pg_enum(Channel, "channel"))
@@ -358,7 +364,7 @@ class Appointment(Base):
     noshow_prob: Mapped[float | None] = mapped_column(Numeric(4, 3))
     predicted_wait_min: Mapped[int | None] = mapped_column(Integer)
     rescheduled_from: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("appointments.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey("appointments.id", ondelete="SET NULL"), nullable=True
     )
 
 

@@ -13,7 +13,8 @@ Work strictly top-to-bottom within a phase. Do not start a phase until the previ
 - [x] Design system as code: Tailwind theme + `tokens.css` from `docs/DESIGN.md` §1 (colors, radii, shadows, fonts self-hosted); base components per §6+§8: Panel, Button (5 variants), Chip (status pairings from §9d), FieldBlock, Eyebrow, TableShell; fade-up/modal-in motion utilities. Storybook-style `/dev/ui` route rendering all of them for visual verification
 - [x] WebSocket channel `/ws/dashboard` + Redis pub/sub bridge; test event round-trips to browser
 - [x] Seed script: 3 hospitals, departments, 30 doctors, rosters, 200 patients
-- [x] CI-lite: `make test` and `make lint` green on clean checkout
+- [x] CI-lite: `make test` and `make lint` green on clean checkout — verified by dropping the
+  database and role, then running `make bootstrap-local migrate seed test lint` from nothing
 
 **Exit:** `make dev` brings up the full stack; login works; a published Redis event appears in the browser.
 **Exit status:** 2 of 3 verified — login works and a `redis-cli publish` reached the browser with no refresh. `make dev` is unverified because Docker is not installed here; `make dev-local` covers the same stack from host postgres/redis and is what was actually exercised.
@@ -102,12 +103,18 @@ MediCore design system and a `/dev/ui` sheet. 12 backend + 5 frontend tests, `ma
 
 **Environment (this machine has no Docker):** postgres 17 + redis 8 run from Homebrew.
 `make dev-local` is the path that works here; `make dev` (compose) is written but unrun.
-Two setup steps a fresh machine needs: `brew services start redis` — and if it refuses to
-start, comment out the four `loadmodule` lines in `/opt/homebrew/etc/redis.conf`, the bottle
-does not ship those modules. DB bootstrap: `CREATE ROLE setu LOGIN PASSWORD 'setu' SUPERUSER;
-CREATE DATABASE swasthya OWNER setu;`
+From a clean checkout: `make install bootstrap-local migrate seed test`. If
+`brew services start redis` refuses to start, comment out the four `loadmodule` lines in
+`/opt/homebrew/etc/redis.conf` — the bottle does not ship those modules.
 
 **Decisions:**
+- FK delete rules are derived, not uniform: nullable → `SET NULL`, required → `CASCADE`,
+  and `appointments.slot_id` → `RESTRICT`. Written into SCHEMA.md and pinned by
+  `tests/test_schema.py`. Caught while 0001 was still unshipped, so it was a regenerate
+  rather than a data migration.
+- Chip colour pairings live in `tokens.css` as `--chip-*-bg/fg`; components carry zero
+  hexes. `--live-state-size: 15px` resolves the §6-vs-§9a conflict (11px chip text vs the
+  3m projector rule) in favour of §9a for anything showing live state.
 - Fonts are self-hosted woff2 in `frontend/src/fonts/`. DESIGN.md §1 offers a Google Fonts
   `@import`; §9b and Iron Rule 4 forbid a runtime fetch, so §9b wins. Do not paste that
   `@import` into `tokens.css`.

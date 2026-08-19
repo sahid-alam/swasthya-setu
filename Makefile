@@ -1,4 +1,7 @@
-.PHONY: install dev dev-local migrate seed demo test lint
+.PHONY: install bootstrap-local dev dev-local migrate seed demo test lint
+
+# From a clean checkout, with postgres + redis running:
+#   make install bootstrap-local migrate seed test
 
 # Every target runs against DATABASE_URL/REDIS_URL, so the same commands work
 # whether postgres and redis come from docker compose or a local install.
@@ -7,6 +10,9 @@ COMPOSE := docker compose -f infra/docker-compose.yml
 install:           ## backend venv + frontend deps
 	cd backend && uv sync
 	cd frontend && npm install
+
+bootstrap-local:   ## create the local role + database (compose does this itself)
+	bash infra/bootstrap-local.sh
 
 dev:               ## full stack via docker compose (canonical)
 	$(COMPOSE) up --build

@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: f280b1450afd
+Revision ID: d7d9c7c6cf60
 Revises:
-Create Date: 2026-08-19 06:28:14.171623
+Create Date: 2026-08-19 07:06:23.532376
 
 """
 
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "f280b1450afd"
+revision: str = "d7d9c7c6cf60"
 down_revision: str | Sequence[str] | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -305,7 +305,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(["hospital_id"], ["hospitals.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["hospital_id"], ["hospitals.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("phone"),
     )
@@ -362,7 +362,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
@@ -387,7 +387,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(["department_id"], ["departments.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["department_id"], ["departments.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["hospital_id"], ["hospitals.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -415,7 +415,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(["department_id"], ["departments.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["department_id"], ["departments.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["hospital_id"], ["hospitals.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -447,7 +447,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_patients_phone"), "patients", ["phone"], unique=False)
@@ -476,7 +476,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(["department_id"], ["departments.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["department_id"], ["departments.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["hospital_id"], ["hospitals.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -516,7 +516,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.ForeignKeyConstraint(["doctor_id"], ["doctors.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["zone_id"], ["zones.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["zone_id"], ["zones.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("doctor_id"),
     )
@@ -555,7 +555,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.ForeignKeyConstraint(["doctor_id"], ["doctors.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["zone_id"], ["zones.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["zone_id"], ["zones.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -767,11 +767,8 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["department_id"], ["departments.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["hospital_id"], ["hospitals.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["patient_id"], ["patients.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["rescheduled_from"],
-            ["appointments.id"],
-        ),
-        sa.ForeignKeyConstraint(["slot_id"], ["slots.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["rescheduled_from"], ["appointments.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["slot_id"], ["slots.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -824,8 +821,8 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["from_hospital_id"], ["hospitals.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["patient_id"], ["patients.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["reserved_bed_id"], ["beds.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["reserved_slot_id"], ["slots.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["reserved_bed_id"], ["beds.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["reserved_slot_id"], ["slots.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["to_hospital_id"], ["hospitals.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -850,8 +847,8 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.ForeignKeyConstraint(["bed_id"], ["beds.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["patient_id"], ["patients.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["referral_id"], ["referrals.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["patient_id"], ["patients.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["referral_id"], ["referrals.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
@@ -902,7 +899,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(["appointment_id"], ["appointments.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["appointment_id"], ["appointments.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["patient_id"], ["patients.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )

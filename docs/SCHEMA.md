@@ -2,6 +2,8 @@
 
 PostgreSQL 16. All tables: `id UUID PK default gen_random_uuid()`, `created_at`, `updated_at`. Enums are real PG enums (Alembic: define manually, autogenerate misses them). Update this file in the same commit as any migration.
 
+**Delete rules.** A nullable FK means the relationship is optional, so it is `ON DELETE SET NULL` — deleting a bed must not delete the referral that reserved it, and deleting an appointment must not erase its `notifications` row (that table is the demo outbox and judge-facing evidence). A required FK means the row is owned by its parent and is `ON DELETE CASCADE`. The one exception is `appointments.slot_id`, which is `RESTRICT`: a replan must move appointments, never delete slots out from under them. `backend/tests/test_schema.py` pins all three behaviours.
+
 ## Core registry
 
 **hospitals** — name, code, district, lat, lng, level(enum: PHC|CHC|DISTRICT|REGIONAL|MEDICAL_COLLEGE), contact
