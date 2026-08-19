@@ -1,0 +1,184 @@
+/* MediCore design tokens — the code form of docs/DESIGN.md §1 and §9d.
+   Never write a raw hex outside this file. */
+@import "tailwindcss";
+@import "./fonts.css";
+
+@theme {
+  /* Ink — near-black, used for text AND dark surfaces/buttons */
+  --color-ink: #0a0e14;
+  --color-ink-2: #11161e;
+
+  /* Brand */
+  --color-primary: #0f4c81;
+  --color-primary-700: #0a3a64;
+  --color-primary-100: #e7eef8;
+  --color-accent: #00c49f;
+  --color-accent-100: #e0f7f1;
+
+  /* Surfaces — light, cool-tinted */
+  --color-bg: #f5f7fb;
+  --color-surface: #ffffff;
+  --color-surface-2: #fafbfd;
+  --color-line: #e3e8f0;
+  --color-line-2: #eef1f6;
+  --color-muted: #6b7588;
+  --color-muted-2: #98a1b3;
+
+  /* Semantic — muted, not neon */
+  --color-danger: #e0526b;
+  --color-warn: #f0a637;
+  --color-info: #5a8def;
+  --color-success: #00c49f;
+
+  /* Chart / data-series palette, in order (§1) */
+  --color-series-1: #5a8def;
+  --color-series-2: #00c49f;
+  --color-series-3: #f0a637;
+  --color-series-4: #9b8ef0;
+  --color-series-5: #e07ab5;
+  --color-series-6: #e0526b;
+
+  /* Radii — rounder as elements get bigger */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+
+  /* Shadows — blue-tinted, soft, large-blur */
+  --shadow-1: 0 1px 0 rgba(15, 20, 30, 0.04), 0 1px 2px rgba(15, 20, 30, 0.04);
+  --shadow-2:
+    0 6px 24px -8px rgba(15, 40, 90, 0.12), 0 2px 6px rgba(15, 40, 90, 0.06);
+  --shadow-pop:
+    0 24px 60px -20px rgba(10, 30, 70, 0.25), 0 4px 12px rgba(10, 30, 70, 0.06);
+
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* One easing family everywhere (§5) */
+  --ease-default: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-sweep: cubic-bezier(0.77, 0, 0.18, 1);
+  --ease-kinetic: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+:root {
+  /* DESIGN.md §1 spells the tokens without the tailwind namespace — both names work,
+     so hand-written CSS can be copied straight out of the doc. */
+  --ink: var(--color-ink);
+  --ink-2: var(--color-ink-2);
+  --primary: var(--color-primary);
+  --primary-700: var(--color-primary-700);
+  --primary-100: var(--color-primary-100);
+  --accent: var(--color-accent);
+  --accent-100: var(--color-accent-100);
+  --bg: var(--color-bg);
+  --surface: var(--color-surface);
+  --surface-2: var(--color-surface-2);
+  --line: var(--color-line);
+  --line-2: var(--color-line-2);
+  --muted: var(--color-muted);
+  --muted-2: var(--color-muted-2);
+  --danger: var(--color-danger);
+  --warn: var(--color-warn);
+  --info: var(--color-info);
+  --success: var(--color-success);
+  --f-sans: var(--font-sans);
+  --f-mono: var(--font-mono);
+
+  /* §9d — the demo's status vocabulary. Use these names, never a raw hex. */
+  --st-present: var(--color-success);
+  --st-elsewhere: var(--color-info);
+  --st-surgery: #9b8ef0; /* violet, from the chart palette */
+  --st-away: var(--color-warn);
+  --st-unknown: var(--color-muted-2);
+
+  --focus-ring: 0 0 0 3px rgba(15, 76, 129, 0.1);
+}
+
+html {
+  font-size: 14px;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  letter-spacing: -0.005em;
+}
+
+/* Numbers, IDs and counters line up in columns (§2). */
+.tnum {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum";
+}
+
+/* --- motion utilities (§5) ------------------------------------------------ */
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    background-position-x: -200%;
+  }
+}
+
+.fade-up {
+  animation: fade-up 680ms var(--ease-default) backwards;
+  animation-delay: var(--delay, 0ms);
+}
+
+.modal-in {
+  animation: modal-in 340ms var(--ease-default) backwards;
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-line-2) 25%,
+    var(--color-surface-2) 37%,
+    var(--color-line-2) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+/* §9d: live dots pulse; critical alerts are the only other pulsing element. */
+@keyframes pulse-dot {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.6s var(--ease-default) infinite;
+  box-shadow: 0 0 8px currentColor;
+}
+
+/* §9d: every surface drops to opacity-only when the user asks for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .fade-up,
+  .modal-in {
+    animation: none;
+  }
+}

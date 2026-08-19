@@ -1,0 +1,63 @@
+name: swasthya-setu
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: setu
+      POSTGRES_PASSWORD: setu
+      POSTGRES_DB: swasthya
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U setu -d swasthya"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  couchdb:
+    image: couchdb:3
+    environment:
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: admin
+    ports: ["5984:5984"]
+    volumes: ["couchdata:/opt/couchdb/data"]
+
+  backend:
+    image: python:3.11-slim
+    working_dir: /app
+    command: >
+      sh -c "pip install -q uv && uv sync --frozen &&
+             .venv/bin/alembic upgrade head &&
+             .venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://setu:setu@postgres:5432/swasthya
+      REDIS_URL: redis://redis:6379/0
+      COUCHDB_URL: http://admin:admin@couchdb:5984
+      JWT_SECRET: dev-only-not-a-secret
+    ports: ["8000:8000"]
+    volumes: ["../backend:/app"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports: ["5173:5173"]
+    volumes: ["../frontend:/app", "/app/node_modules"]
+    depends_on: [backend]
+
+volumes:
+  pgdata:
+  couchdata:

@@ -57,7 +57,9 @@ Monolith-first: one FastAPI app with clean internal service modules, one React P
 | `referral.updated` | referral_id, status | both hospitals' dashboards |
 | `alert.raised` | type, severity, context | dashboard |
 
-WebSocket endpoints simply relay subscribed topics: `/ws/dashboard?hospital_id=` (staff JWT), `/ws/patient` (own appointments only).
+WebSocket endpoints simply relay subscribed topics: `/ws/dashboard?hospital_id=` (staff JWT), `/ws/patient` (own appointments only). Token rides the query string — browsers cannot set headers on a WebSocket.
+
+The first frame on any socket is `ws.ready`, sent once Redis has acknowledged the subscription. An open socket is not yet a subscribed one, so without it neither a client nor a test can tell a missed event from a slow one.
 
 ## Offline strategy (PWA)
 
@@ -73,6 +75,10 @@ Bookings made offline go to a local PouchDB `outbox`; on reconnect they sync to 
 | D4 | Mock adapters persist real rows | Demo must show messages w/o vendor accounts | — |
 | D5 | Models trained offline, artifacts committed | Training must never block or flake | Artifact >100MB → use release assets |
 | D6 | CouchDB only for PWA outbox/read-cache | Full offline DB sync is a rabbit hole | — |
+| D7 | Compose is canonical; `make dev-local` runs the same stack off host postgres/redis | Not every dev machine has Docker; blocking on it stalls the build | — |
+| D8 | Fonts self-hosted as woff2, never fetched at runtime | DESIGN.md §9b + Iron Rule 4: the PWA and the demo must render with no internet | — |
+| D9 | `tokens.css` is both the token block and the Tailwind theme (v4 `@theme`) | One file to keep in sync with DESIGN.md §1 instead of two | Tailwind drops `@theme` |
+| D10 | Settings only declares env vars that code reads | An unread `*_MOCK_MODE` flag reads as wired-up and silently isn't | — |
 
 ## Ports (dev)
 

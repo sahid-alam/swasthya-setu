@@ -4,18 +4,19 @@ Work strictly top-to-bottom within a phase. Do not start a phase until the previ
 
 ## Phase 0 — Foundation (target: ~1 week part-time)
 
-- [ ] Monorepo scaffold per CLAUDE.md layout; Makefile with all targets (stub ok)
-- [ ] `infra/docker-compose.yml`: postgres, redis, couchdb, backend (hot reload), frontend (Vite dev)
-- [ ] FastAPI skeleton: settings via pydantic-settings, `/api/v1/health`, error handling, CORS
-- [ ] Alembic initialized; migration 0001 = full schema from `docs/SCHEMA.md`
-- [ ] Auth: JWT, roles (admin, doctor, staff, patient); seed admin user
-- [ ] React PWA scaffold: Vite + Tailwind, service worker, login, empty dashboard shell
-- [ ] Design system as code: Tailwind theme + `tokens.css` from `docs/DESIGN.md` §1 (colors, radii, shadows, fonts self-hosted); base components per §6+§8: Panel, Button (5 variants), Chip (status pairings from §9d), FieldBlock, Eyebrow, TableShell; fade-up/modal-in motion utilities. Storybook-style `/dev/ui` route rendering all of them for visual verification
-- [ ] WebSocket channel `/ws/dashboard` + Redis pub/sub bridge; test event round-trips to browser
-- [ ] Seed script: 3 hospitals, departments, 30 doctors, rosters, 200 patients
-- [ ] CI-lite: `make test` and `make lint` green on clean checkout
+- [x] Monorepo scaffold per CLAUDE.md layout; Makefile with all targets (stub ok)
+- [ ] `infra/docker-compose.yml`: postgres, redis, couchdb, backend (hot reload), frontend (Vite dev) — *written, never run: no Docker on this machine*
+- [x] FastAPI skeleton: settings via pydantic-settings, `/api/v1/health`, error handling, CORS
+- [x] Alembic initialized; migration 0001 = full schema from `docs/SCHEMA.md`
+- [x] Auth: JWT, roles (admin, doctor, staff, patient); seed admin user
+- [x] React PWA scaffold: Vite + Tailwind, service worker, login, empty dashboard shell
+- [x] Design system as code: Tailwind theme + `tokens.css` from `docs/DESIGN.md` §1 (colors, radii, shadows, fonts self-hosted); base components per §6+§8: Panel, Button (5 variants), Chip (status pairings from §9d), FieldBlock, Eyebrow, TableShell; fade-up/modal-in motion utilities. Storybook-style `/dev/ui` route rendering all of them for visual verification
+- [x] WebSocket channel `/ws/dashboard` + Redis pub/sub bridge; test event round-trips to browser
+- [x] Seed script: 3 hospitals, departments, 30 doctors, rosters, 200 patients
+- [x] CI-lite: `make test` and `make lint` green on clean checkout
 
 **Exit:** `make dev` brings up the full stack; login works; a published Redis event appears in the browser.
+**Exit status:** 2 of 3 verified — login works and a `redis-cli publish` reached the browser with no refresh. `make dev` is unverified because Docker is not installed here; `make dev-local` covers the same stack from host postgres/redis and is what was actually exercised.
 
 ## Phase 1 — Tier 1 vertical slice (target: ~4 weeks part-time)
 
@@ -88,3 +89,59 @@ Append one entry per session: date · phase/items touched · decisions made · a
 - Phase 0: compose + FastAPI skeleton done. Decided couchdb waits until 1C (not blocking).
 - Gotcha: alembic autogenerate misses the enum types; write them manually.
 -->
+
+### 2026-08-19
+
+**Done:** Phase 0, 9 of 10 items. Backend (FastAPI + SQLAlchemy 2 + Alembic + JWT + Redis
+pub/sub → `/ws/dashboard`), full schema migration, deterministic seed, React 18 PWA with the
+MediCore design system and a `/dev/ui` sheet. 12 backend + 5 frontend tests, `make lint` and
+`make test` green.
+
+**Verified end-to-end in a real browser:** logged in as the seeded admin, then
+`redis-cli publish presence.changed …` appeared on the dashboard with no interaction.
+
+**Environment (this machine has no Docker):** postgres 17 + redis 8 run from Homebrew.
+`make dev-local` is the path that works here; `make dev` (compose) is written but unrun.
+Two setup steps a fresh machine needs: `brew services start redis` — and if it refuses to
+start, comment out the four `loadmodule` lines in `/opt/homebrew/etc/redis.conf`, the bottle
+does not ship those modules. DB bootstrap: `CREATE ROLE setu LOGIN PASSWORD 'setu' SUPERUSER;
+CREATE DATABASE swasthya OWNER setu;`
+
+**Decisions:**
+- Fonts are self-hosted woff2 in `frontend/src/fonts/`. DESIGN.md §1 offers a Google Fonts
+  `@import`; §9b and Iron Rule 4 forbid a runtime fetch, so §9b wins. Do not paste that
+  `@import` into `tokens.css`.
+- Tailwind v4 `@theme` makes `tokens.css` both the token block and the Tailwind theme — one
+  file, no `tailwind.config.js`. DESIGN.md's unprefixed names (`--primary`) are aliased to the
+  tailwind-namespaced ones so CSS can be copied out of the doc verbatim.
+- `users` gained a `name` column, folded into migration 0001 (not yet shipped, so no 0002).
+  `docs/SCHEMA.md` updated in the same commit. Without it every doctor renders as a UUID.
+- `app/config.py` declares a setting only when code reads it. `COUCHDB_URL`, `SIM_SPEED` and
+  the `*_MOCK_MODE` flags stay in `.env.example` but are not in `Settings` yet — a flag that
+  appears in that class is one that actually does something.
+- Python pinned to 3.11 via `uv` (host is 3.12) to match CLAUDE.md and the compose image.
+
+**Gotchas for the next session:**
+- Alembic autogenerate really does double-create PG enums — any type used by two tables
+  (`presence_state`, `channel`) emits `CREATE TYPE` twice. 0001 creates all 23 up front and
+  every column references them with `create_type=False`. Keep that shape in 0002.
+- `TestClient` deadlocks if you make an HTTP call inside a `websocket_connect` block.
+  `tests/test_events.py` publishes with the sync redis client instead.
+- Subscribing to Redis is async, so an accepted socket is not yet a listening one. Every
+  socket now gets a `ws.ready` first frame; tests wait for it before publishing. Counting
+  subscribers instead is wrong — a running dev server is also a subscriber, which is what
+  made the suite hang until this was fixed. Any new WS test must wait for `ws.ready`.
+- Restart uvicorn after a migration: asyncpg caches prepared statements and throws
+  `InvalidCachedStatementError` on the first request against a changed schema.
+- Port 5173 was occupied by another project, so Vite fell back to 5174. The proxy handles
+  `/api` and `/ws`, so CORS never came into play.
+
+**Next session picks up:** Phase 1A, first item — `POST /api/v1/signals` ingestion.
+Read PRD §M1 and `.claude/skills/signal-simulator/` first. Also still open from Phase 0:
+run `make dev` once Docker exists on some machine, and decide the Supabase question raised
+in chat (see below).
+
+**Open question raised in chat, not decided:** using Supabase. It conflicts with Iron Rule 4
+(hosted Postgres means no offline demo) and with the fixed stack, but Supabase-as-managed-
+Postgres for a shared team dev DB would work unchanged — SQLAlchemy/Alembic only need the
+connection string. Needs a team decision, no code was written either way.

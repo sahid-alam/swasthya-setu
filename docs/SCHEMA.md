@@ -6,7 +6,7 @@ PostgreSQL 16. All tables: `id UUID PK default gen_random_uuid()`, `created_at`,
 
 **hospitals** — name, code, district, lat, lng, level(enum: PHC|CHC|DISTRICT|REGIONAL|MEDICAL_COLLEGE), contact
 **departments** — hospital_id FK, name, specialty_code, room_count
-**users** — phone (unique), email?, password_hash?, role(enum: ADMIN|DOCTOR|STAFF|PATIENT), hospital_id FK?
+**users** — name, phone (unique), email?, password_hash?, role(enum: ADMIN|DOCTOR|STAFF|PATIENT), hospital_id FK?
 **doctors** — user_id FK, hospital_id FK, department_id FK, specialty, badge_id (unique; what BLE/RFID track), face_enrolled bool, avg_consult_minutes
 **patients** — user_id FK?, name, phone, age, gender, village/district, priority_flags jsonb (elderly, disabled, pregnant…), preferred_language(enum: HI|EN)
 

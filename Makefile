@@ -1,0 +1,33 @@
+.PHONY: install dev dev-local migrate seed demo test lint
+
+# Every target runs against DATABASE_URL/REDIS_URL, so the same commands work
+# whether postgres and redis come from docker compose or a local install.
+COMPOSE := docker compose -f infra/docker-compose.yml
+
+install:           ## backend venv + frontend deps
+	cd backend && uv sync
+	cd frontend && npm install
+
+dev:               ## full stack via docker compose (canonical)
+	$(COMPOSE) up --build
+
+dev-local:         ## no-docker path: expects postgres + redis already running locally
+	cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000 & \
+	cd frontend && npm run dev
+
+migrate:
+	cd backend && .venv/bin/alembic upgrade head
+
+seed:
+	cd backend && .venv/bin/python -m app.seed
+
+demo: migrate seed  ## seeded demo day + scripted scenario
+	@echo "scripted scenario lands in Phase 3 — see infra/demo-script.md"
+
+test:
+	cd backend && .venv/bin/pytest -q
+	cd frontend && npx vitest run
+
+lint:
+	cd backend && .venv/bin/ruff check . && .venv/bin/black --check .
+	cd frontend && npm run lint
