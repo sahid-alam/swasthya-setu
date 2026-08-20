@@ -26,7 +26,7 @@ docs/          PRD, PLAN, ARCHITECTURE, SCHEMA. Source of truth.
 ## Stack — fixed decisions, do not re-litigate
 
 - Backend: **FastAPI** (not Flask/Django), SQLAlchemy 2.x + Alembic, Pydantic v2
-- DB: **PostgreSQL 16**. Cache/pubsub: **Redis 7**. Offline sync: CouchDB ↔ PouchDB
+- DB: **PostgreSQL 16**. Cache/pubsub: **Redis 7**. PWA offline outbox: localStorage + REST replay (ARCHITECTURE D23 — PouchDB/CouchDB retired)
 - Frontend: **React 18 + Vite PWA**, Tailwind, Leaflet for maps
 - Optimization: **Google OR-Tools CP-SAT** (never hand-rolled heuristics)
 - ML: **XGBoost** (wait time, no-show), **Prophet** (footfall forecast) — load committed artifacts from `ml/artifacts/`, never train at runtime

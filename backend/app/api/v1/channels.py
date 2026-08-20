@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import events
 from app.adapters.whatsapp_mock import MENU, parse_reply
 from app.db import get_db
 from app.models import Channel, Department, Hospital, Patient, UserRole
@@ -21,10 +22,27 @@ from app.services import booking, notify
 router = APIRouter(prefix="/channels", tags=["channels"])
 STAFF = require_roles(UserRole.ADMIN, UserRole.STAFF)
 
-# In-memory, because a guided booking conversation is seconds long and losing one to
-# a restart costs the patient a re-send, not data. Redis if this ever runs multi-node.
-# ponytail: dict, not a session store. Revisit when there is more than one worker.
-_SESSIONS: dict[str, dict] = {}
+# Conversation state lives in Redis, keyed by phone number, so a second worker picks
+# up mid-conversation instead of dropping the patient back at the menu. The TTL is the
+# whole expiry policy: an abandoned conversation costs nothing and cleans itself up.
+SESSION_TTL_SECONDS = 30 * 60
+
+
+def _session_key(phone: str) -> str:
+    digits = "".join(c for c in phone if c.isdigit())[-10:]
+    return f"chat:whatsapp:{digits}"
+
+
+async def load_session(phone: str) -> dict:
+    return await events.get_json(_session_key(phone)) or {"state": "menu"}
+
+
+async def save_session(phone: str, session: dict) -> None:
+    await events.set_json(_session_key(phone), session, SESSION_TTL_SECONDS)
+
+
+async def clear_session(phone: str) -> None:
+    await events.delete(_session_key(phone))
 
 
 class InboundIn(BaseModel):
@@ -51,7 +69,22 @@ async def _patient_for(db: AsyncSession, phone: str) -> Patient | None:
 async def whatsapp_inbound(
     body: InboundIn, db: AsyncSession = Depends(get_db), _=Depends(STAFF)
 ) -> ReplyOut:
-    """One turn of the guided booking conversation."""
+    """One turn of the guided booking conversation.
+
+    Load, run, save — exactly one persist point. The turn logic has eight return
+    paths and sprinkling a save before each is how you end up with the one that
+    forgets, silently dropping the patient back to the menu.
+    """
+    session = await load_session(body.from_phone)
+    reply = await _turn(db, body, session)
+    if reply.state != "unknown_patient":
+        # a number we do not know gets an answer but no stored state; otherwise any
+        # wrong number or spam sender writes a key
+        await save_session(body.from_phone, session)
+    return reply
+
+
+async def _turn(db: AsyncSession, body: InboundIn, session: dict) -> ReplyOut:
     patient = await _patient_for(db, body.from_phone)
     if patient is None:
         return ReplyOut(
@@ -60,7 +93,6 @@ async def whatsapp_inbound(
         )
 
     lang = patient.preferred_language.value
-    session = _SESSIONS.setdefault(body.from_phone, {"state": "menu"})
     parsed = parse_reply(body.text)
 
     # State beats intent while a choice is pending. "1" means "the first option I just

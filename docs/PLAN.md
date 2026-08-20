@@ -5,7 +5,7 @@ Work strictly top-to-bottom within a phase. Do not start a phase until the previ
 ## Phase 0 — Foundation (target: ~1 week part-time)
 
 - [x] Monorepo scaffold per CLAUDE.md layout; Makefile with all targets (stub ok)
-- [x] `infra/docker-compose.yml`: postgres, redis, couchdb, backend (hot reload), frontend (Vite dev) — all five containers verified up on 2026-08-20; migrations, seed and the M1 scenarios all ran against the compose stack
+- [x] `infra/docker-compose.yml`: postgres, redis, backend (hot reload), frontend (Vite dev) — verified up on 2026-08-20 (five containers then; couchdb since removed, D23). *Not re-verified since `libgomp1` + `../ml:/ml:ro` were added — deferred by decision, demo runs on `dev-local`.*
 - [x] FastAPI skeleton: settings via pydantic-settings, `/api/v1/health`, error handling, CORS
 - [x] Alembic initialized; migration 0001 = full schema from `docs/SCHEMA.md`
 - [x] Auth: JWT, roles (admin, doctor, staff, patient); seed admin user
@@ -132,7 +132,7 @@ From a clean checkout: `make install bootstrap-local migrate seed test`. If
   tailwind-namespaced ones so CSS can be copied out of the doc verbatim.
 - `users` gained a `name` column, folded into migration 0001 (not yet shipped, so no 0002).
   `docs/SCHEMA.md` updated in the same commit. Without it every doctor renders as a UUID.
-- `app/config.py` declares a setting only when code reads it. `COUCHDB_URL`, `SIM_SPEED` and
+- `app/config.py` declares a setting only when code reads it. `SIM_SPEED` and
   the `*_MOCK_MODE` flags stay in `.env.example` but are not in `Settings` yet — a flag that
   appears in that class is one that actually does something.
 - Python pinned to 3.11 via `uv` (host is 3.12) to match CLAUDE.md and the compose image.

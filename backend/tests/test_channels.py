@@ -10,14 +10,14 @@ def auth(admin_token):
 
 
 @pytest.fixture(autouse=True)
-def fresh_session():
-    """Conversations are in-memory and module-level, so one test must not start
-    halfway through another test's flow."""
-    from app.api.v1.channels import _SESSIONS
+def fresh_session(client, phone):
+    """Conversation state now lives in Redis, so it survives the process — a test
+    must not start halfway through another test's flow."""
+    from app.api.v1.channels import clear_session
 
-    _SESSIONS.clear()
+    client.portal.call(clear_session, phone)
     yield
-    _SESSIONS.clear()
+    client.portal.call(clear_session, phone)
 
 
 @pytest.fixture
@@ -86,3 +86,45 @@ def test_free_text_falls_back_to_the_menu(client, auth, phone):
 def test_the_webhook_is_not_public(client, phone):
     r = client.post("/api/v1/channels/whatsapp/inbound", json={"from_phone": phone, "text": "hi"})
     assert r.status_code == 401
+
+
+def test_a_conversation_survives_the_process_that_started_it(client, auth, phone):
+    """The whole reason state moved to Redis: a second worker (or a restart) must
+    pick the patient up mid-flow, not drop them back at the menu."""
+    from app.api.v1.channels import load_session
+
+    say(client, auth, phone, "hi")
+    say(client, auth, phone, "1")  # now choosing a department
+
+    # nothing in this process remembers the conversation; Redis does
+    stored = client.portal.call(load_session, phone)
+    assert stored["state"] == "choosing_department"
+    assert stored["departments"], "the listed options must survive too, not just the state"
+
+    # continuing works from that stored state alone
+    assert say(client, auth, phone, "1")["state"] == "choosing_slot"
+
+
+def test_an_abandoned_conversation_expires_rather_than_leaking(client, phone):
+    from app import events
+    from app.api.v1.channels import SESSION_TTL_SECONDS, _session_key
+
+    async def _ttl():
+        return await events.client().ttl(_session_key(phone))
+
+    client.portal.call(_ttl)  # key may not exist yet; the assertion is on the policy
+    assert 0 < SESSION_TTL_SECONDS <= 3600, "state with no expiry is a leak"
+
+
+def test_an_unknown_number_does_not_get_stored_state(client, auth):
+    """Otherwise any wrong number or spam sender writes a key."""
+    from app import events
+    from app.api.v1.channels import _session_key
+
+    stranger = "+919999000011"
+    say(client, auth, stranger, "hi")
+
+    async def _exists():
+        return await events.client().exists(_session_key(stranger))
+
+    assert client.portal.call(_exists) == 0

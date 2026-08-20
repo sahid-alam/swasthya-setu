@@ -22,14 +22,6 @@ services:
       interval: 5s
       retries: 10
 
-  couchdb:
-    image: couchdb:3
-    environment:
-      COUCHDB_USER: admin
-      COUCHDB_PASSWORD: admin
-    ports: ["5984:5984"]
-    volumes: ["couchdata:/opt/couchdb/data"]
-
   backend:
     image: python:3.11-slim
     working_dir: /app
@@ -41,7 +33,6 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://setu:setu@postgres:5432/swasthya
       REDIS_URL: redis://redis:6379/0
-      COUCHDB_URL: http://admin:admin@couchdb:5984
       JWT_SECRET: dev-only-not-a-secret
     ports: ["8000:8000"]
     # anonymous volume on .venv: the bind mount would otherwise let the container's
@@ -66,4 +57,3 @@ services:
 
 volumes:
   pgdata:
-  couchdata:

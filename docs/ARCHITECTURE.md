@@ -18,7 +18,7 @@ Monolith-first: one FastAPI app with clean internal service modules, one React P
 └───────────────┬───────────────────────────────────────┬─────────────────────────┘
                 │ SQLAlchemy                            │ /ws/dashboard, /ws/patient
            PostgreSQL 16                          React PWA (frontend/)
-           Redis 7 (cache, pub/sub, queues)       CouchDB ⇄ PouchDB (offline)
+           Redis 7 (cache, pub/sub, queues)       localStorage outbox (offline)
 ```
 
 ## Data flow: the spine
@@ -65,7 +65,7 @@ The first frame on any socket is `ws.ready`, sent once Redis has acknowledged th
 
 ## Offline strategy (PWA)
 
-Bookings made offline go to a local PouchDB `outbox`; on reconnect they sync to CouchDB, a backend worker validates against live slots and either confirms or proposes the nearest alternative (never silently books a taken slot). Read models (my appointments, hospital info) are cached for offline display with a "last synced" stamp.
+Bookings made offline go to a `localStorage` outbox (`frontend/src/lib/outbox.ts`); on reconnect the PWA replays them against the normal booking API. A 409 or 404 drops that intent and the patient is asked to pick again — a slot taken while they were offline is never silently double-booked. No CouchDB, no replication, no sync worker (D23). A read-cache, if one is ever needed, is where PouchDB would earn its place back.
 
 ## Key decisions log
 
@@ -91,10 +91,11 @@ Bookings made offline go to a local PouchDB `outbox`; on reconnect they sync to 
 | D18 | Wait-time model trains on simulated clinic days, labelled SYNTHETIC everywhere it surfaces | No public dataset gives per-position OPD waits; Iron Rule 5 says say so rather than imply otherwise | Real HMIS queue data arrives |
 | D19 | Overbooking is capped at 3 per doctor per day, only on seats whose occupant is ≥50% likely to miss | Overbooking is a bet, and losing it means a real person waits in a corridor | Measured no-show calibration improves |
 | D21 | Message bodies live in `adapters/base.render`, not in each adapter | Otherwise WhatsApp and SMS drift and the same patient gets different words depending on how they were reached | — |
+| D24 | WhatsApp conversation state in Redis under `chat:whatsapp:{phone}`, TTL 30 min | An in-process dict drops the patient back to the menu on any restart or second worker; the TTL is the entire expiry policy | — |
 | D23 | PWA outbox is localStorage + REST replay, not PouchDB/CouchDB (supersedes D6) | Without CouchDB replication, PouchDB is ~150 KB and a vulnerable `uuid` transitive dep doing what 40 lines do. Same rationale as D6 — avoid the sync rabbit hole — taken one step further. Interface unchanged, so PouchDB drops back in by replacing one file | A read-cache needs real replication |
 | D22 | Notifications are sent inside the replan transaction, not as a follow-up job | A plan that moved forty patients and told none of them is worse than no plan | Send latency starts dominating the replan |
 | D20 | An unseatable patient becomes RESCHEDULE_PENDING, never a silent CANCELLED | A cancelled row means the patient finds out by turning up to an empty clinic; pending keeps them owed an appointment and on a staff screen | — |
 
 ## Ports (dev)
 
-backend 8000 · frontend 5173 · postgres 5432 · redis 6379 · couchdb 5984 · osrm 5000
+backend 8000 · frontend 5173 · postgres 5432 · redis 6379 · osrm 5000

@@ -34,6 +34,21 @@ async def publish(topic: str, payload: dict) -> None:
 READY = "ws.ready"
 
 
+async def get_json(key: str) -> dict | None:
+    raw = await client().get(key)
+    return json.loads(raw) if raw else None
+
+
+async def set_json(key: str, value: dict, ttl_seconds: int) -> None:
+    """Short-lived shared state. TTL is mandatory — anything without one here is a
+    leak waiting to happen."""
+    await client().set(key, json.dumps(value, default=str), ex=ttl_seconds)
+
+
+async def delete(key: str) -> None:
+    await client().delete(key)
+
+
 async def subscribe(topics: list[str]) -> AsyncIterator[dict]:
     """Yield `{topic, payload}` for each message until the caller stops iterating.
 

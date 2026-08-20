@@ -53,10 +53,16 @@ presence:{doctor_id}            hash mirror of doctor_status (hot read)   TTL no
 queue:{department_id}           list of appointment ids (live order)
 ws:dash:{hospital_id}           pub/sub relay channels
 lock:replan:{doctor_id}         SET NX EX 30 — dedupe replan triggers
+chat:whatsapp:{phone10}         guided booking conversation state         TTL 30 min
 cache:slots:{dept}:{date}       json, TTL 60s, busted on replan
 ```
 
-## CouchDB (PWA offline only)
+## PWA offline storage (browser, not a server)
 
-`outbox_{user}`: pending booking intents `{intent_id, patient, dept, preferred_windows, created_at}` — backend worker consumes, confirms or counter-proposes.
-`readcache_{user}`: my appointments + hospital directory snapshots with `synced_at`.
+No CouchDB. The offline outbox lives in the browser's `localStorage` under `setu.outbox`
+and replays over the normal REST API when connectivity returns (ARCHITECTURE D23).
+
+`setu.outbox`: pending booking intents `{intent_id, patient_id, slot_id, channel, created_at, label}`.
+On replay a 409 or 404 drops the intent and the patient is asked to pick again — a slot
+taken while they were offline is never silently double-booked.
+`setu.token`, `setu.lang`: session token and language choice.
