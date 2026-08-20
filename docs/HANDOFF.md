@@ -5,10 +5,10 @@ Everything below is state a fresh session cannot infer from the code in reasonab
 
 ## Status
 
-**Phase 0 and Phase 1 are complete; Phase 2 is well under way.** 37 of 52 plan items
+**Phase 0 and Phase 1 are complete; Phase 2 is well under way.** 38 of 54 plan items
 ticked. Migrations are at `0006`.
 
-- **175 backend tests, 13 frontend tests**, `make lint` clean, suite stable across repeat runs
+- **182 backend tests, 13 frontend tests**, `make lint` clean, suite stable across repeat runs
 - `make demo-check` is **8/8** — the Iron Rule 4 guard; run it after anything touching the spine
 - **The next session is UI work.** Backend paused mid-Phase-2; Bhashini is the next
   unchecked item when it resumes.
@@ -61,13 +61,23 @@ survive offline*: live mode is welcome, the price is a mock that is the default,
 |---|---|
 | **Telegram** | **Verified end to end** on a real handset — OTP, booking, cancellation, all `mock=false`. @Swasthya_Setu_bot |
 | **Email** | **Verified through Gmail** — OTP and booking confirmation, HTML built from DESIGN.md tokens. A first send lands in spam; that is sender reputation, not a bug |
+| **Phone OTP (2Factor voice)** | **Verified live** — a real call reads the code out. `SMS_PROVIDER=2factor-voice` + `TWOFACTOR_API_KEY`. OTP-only: it delivers digits, not sentences |
 | **Vapi** | Tools verified over the public internet via `make tunnel`. The browser button needs `VITE_VAPI_PUBLIC_KEY` + `VITE_VAPI_ASSISTANT_ID` and is **unproven** |
 | WhatsApp | Code complete, **parked** on Meta template approval |
-| SMS (Android gateway) | Code complete, **unverified**: the handset answered no ARP on the LAN and its Cloud token is `NotRegistered` |
+| SMS text (2Factor) | Built (`SMS_PROVIDER=2factor-sms`) and **off**: it reports DELIVERED and is still carrier-filtered. That is India's DLT registration, not our code — one env value once the sender ID clears |
+| SMS text (Android gateway) | Code complete, **unverified**: the handset answered no ARP on the LAN and its Cloud token is `NotRegistered` |
 | IVR | Mock telephony by design — no Exotel account |
 
-**Live SMS is fenced** (CLAUDE.md §Conventions): 30/day and 5/minute counted in Redis,
-tests always run mock whatever `.env` says, and `demo-check` refuses a live gateway.
+**Where a login code actually goes.** Email login → email. Phone login → a linked
+Telegram chat if there is one (free, instant, and the patient linked it for exactly
+this), otherwise whatever `SMS_PROVIDER` is — a 2Factor voice call when live, the mock
+outbox otherwise. Always **exactly one channel**, never a fan-out: a code sent to two
+places is a code delivered to whoever holds either one. `via: "sms"` forces the fallback.
+
+**Live SMS and voice are fenced** (CLAUDE.md §Conventions): 30/day and 5/minute counted
+in Redis by `adapters/sms_fence.py` and shared by every provider, tests always run mock
+whatever `.env` says, and **`demo-check` refuses to run at all while SMS is live** —
+expect that and flip `SMS_MOCK_MODE=true` to verify the spine.
 
 ## The things that will waste your time if you do not know them
 
@@ -88,13 +98,19 @@ tests always run mock whatever `.env` says, and `demo-check` refuses a live gate
 8. **`make seed` truncates `patients`**, destroying any live Telegram link and the demo
    patient's phone and email. Set `DEMO_PATIENT_PHONE` and `DEMO_PATIENT_EMAIL` in `.env`
    so a re-seed restores them; the Telegram chat still needs one re-tap of Share.
+9. **`pkill -f uvicorn` can leave a stale listener on :8000**, and the next server starts
+   without ever binding — so your new env vars appear to be ignored. Kill by port:
+   `lsof -nP -iTCP:8000 -sTCP:LISTEN -t | xargs kill -9`.
+10. **The rate fence is real Redis state, shared by every provider.** Tests must never
+   spend it; a day of testing once exhausted 30/day and the suite began failing by the
+   calendar rather than by the code.
 
 Tests share one database, so anything mutating appointments must build its own fixture
 state rather than leaning on the seed or on test order.
 
 ## Decisions already made — do not re-litigate
 
-`docs/ARCHITECTURE.md` has the full table (D1–D28). Most likely to be second-guessed:
+`docs/ARCHITECTURE.md` has the full table (D1–D30). Most likely to be second-guessed:
 
 - **D26 — authentication stays ours.** JWT + phone/email OTP. No Supabase, Clerk, Better
   Auth or any hosted identity provider. **Closed.** A hosted login cannot be mocked and
