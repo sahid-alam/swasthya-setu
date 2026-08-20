@@ -75,9 +75,17 @@ async def _fan_out(
 ) -> list[Notification]:
     written: list[Notification] = []
     for channel in channels or CHANNEL_ORDER:
-        adapter = messaging(channel)
+        # Where a channel reaches this patient. Email is the only one that is not the
+        # phone number, and a patient without an address simply has no email channel.
+        to = patient.email if channel == Channel.EMAIL else patient.phone
+        if not to:
+            log.warning("no %s address for patient %s", channel.value, patient.id)
+            continue
         try:
-            result = await adapter.send(to=patient.phone, template=template, params=params)
+            # Selection is inside the try on purpose: a live adapter whose credentials
+            # are missing raises while being *built*, and that must degrade like any
+            # other vendor failure rather than 500 the flow that asked for it.
+            result = await messaging(channel).send(to=to, template=template, params=params)
         except AdapterError as exc:
             # A vendor failing must degrade, never crash a clinical flow.
             log.warning("%s adapter refused: %s", channel.value, exc)

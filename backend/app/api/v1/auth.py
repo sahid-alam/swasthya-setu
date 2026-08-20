@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,8 +44,22 @@ async def me(user: dict = Depends(current_user)) -> Me:
 # Reuses the existing JWT and the existing mock SMS adapter. No new auth service.
 
 
-class OtpRequestIn(BaseModel):
-    phone: str = Field(min_length=6, max_length=20)
+class OtpContact(BaseModel):
+    """A phone number or an email address — exactly one. Two would leave the caller
+    deciding which one the code was sent to, and this is a trust boundary."""
+
+    phone: str | None = Field(default=None, min_length=6, max_length=20)
+    email: str | None = Field(default=None, min_length=5, max_length=160)
+
+    @model_validator(mode="after")
+    def exactly_one(self) -> "OtpContact":
+        if bool(self.phone) == bool(self.email):
+            raise ValueError("give exactly one of phone, email")
+        return self
+
+
+class OtpRequestIn(OtpContact):
+    pass
 
 
 class OtpRequestOut(BaseModel):
@@ -53,8 +67,7 @@ class OtpRequestOut(BaseModel):
     message: str
 
 
-class OtpVerifyIn(BaseModel):
-    phone: str = Field(min_length=6, max_length=20)
+class OtpVerifyIn(OtpContact):
     code: str = Field(min_length=4, max_length=8)
 
 
@@ -64,19 +77,20 @@ async def request_otp(body: OtpRequestIn, db: AsyncSession = Depends(get_db)) ->
 
     Saying "no such patient" would turn this endpoint into a directory of who is
     registered at which hospital, so the response is identical whether or not we sent
-    anything. Rate limiting lives in the service.
+    anything — including the wording, which must not name the channel we tried.
+    Rate limiting lives in the service.
     """
-    await otp.request_code(db, body.phone)
+    await otp.request_code(db, phone=body.phone, email=body.email)
     await db.commit()
     return OtpRequestOut(
         sent=True,
-        message="If that number is registered, we have sent it a code.",
+        message="If that contact is registered, we have sent it a code.",
     )
 
 
 @router.post("/otp/verify", response_model=Token)
 async def verify_otp(body: OtpVerifyIn) -> Token:
-    patient_id = await otp.verify_code(body.phone, body.code)
+    patient_id = await otp.verify_code(body.code, phone=body.phone, email=body.email)
     if patient_id is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "that code is wrong or has expired")
     return Token(access_token=make_token(patient_id, UserRole.PATIENT), role=UserRole.PATIENT)

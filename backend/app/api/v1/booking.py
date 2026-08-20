@@ -185,6 +185,7 @@ class OutboxOut(BaseModel):
     status: str
     mock: bool
     to: str | None = None
+    subject: str | None = None  # email only; the other channels have no such thing
     body: str | None = None
     error: str | None = None
 
@@ -212,6 +213,7 @@ async def outbox(
             status=n.status.value,
             mock=n.mock,
             to=(n.payload or {}).get("to"),
+            subject=(n.payload or {}).get("subject"),
             body=(n.payload or {}).get("body"),
             error=(n.payload or {}).get("error"),
         )

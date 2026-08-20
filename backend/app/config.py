@@ -24,6 +24,20 @@ class Settings(BaseSettings):
     sms_mock_mode: bool = True
     whatsapp_mock_mode: bool = True
     telephony_mock_mode: bool = True  # Exotel: IVR now, outbound TTS calls later
+    email_mock_mode: bool = True  # false needs the SMTP_* block below
+
+    # Only read when email_mock_mode is false (D10: no flag that does nothing).
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_timeout_seconds: int = 10
+
+    # The demo needs one patient whose address you can actually receive mail at.
+    # Applied by `make seed` to the first seeded patient; empty leaves every patient
+    # without an email, which is the honest default.
+    demo_patient_email: str = ""
 
     # .env.example also lists the remaining *_MOCK_MODE flags; those arrive with their
     # adapters.

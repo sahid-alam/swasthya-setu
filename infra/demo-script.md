@@ -235,6 +235,18 @@ curl -s "localhost:8000/api/v1/notifications?limit=1" -H "Authorization: Bearer 
 > same SMS adapter that already sends the reschedule notices — we did not add an auth
 > service to get patient login."
 
+**Or by email**, for a handset that drops SMS: tap *Use email instead*. Same screen,
+same code, same JWT — the address is looked up case-insensitively and the code goes to
+the inbox and nowhere else. `make seed` puts `DEMO_PATIENT_EMAIL` on the first patient,
+so this works against an inbox you can actually open; without it, no patient has an
+address and the email path answers exactly like an unknown one.
+
+> "One flag — `EMAIL_MOCK_MODE=false` plus an SMTP block — and that same code goes out
+> over real Gmail. We keep the mock as the default because a demo that needs the venue's
+> internet is a demo that can fail in front of you. That is Iron Rule 4: the thing must
+> survive offline, not avoid being live."
+
+
 Note the reply to the *request* is deliberately vague — "if that number is registered"
 — so the endpoint cannot be used to find out who is a patient.
 

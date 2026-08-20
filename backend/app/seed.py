@@ -11,6 +11,7 @@ from datetime import UTC, datetime, time, timedelta
 
 from sqlalchemy import select, text
 
+from app.config import get_settings
 from app.db import SessionLocal
 from app.models import (
     Appointment,
@@ -443,6 +444,14 @@ async def main() -> None:
                     preferred_language=Language.HI if i % 4 else Language.EN,
                 )
             )
+        # One patient you can actually receive mail as, so email OTP is demoable
+        # against a real inbox. Deliberately the first seeded patient — deterministic
+        # under the fixed RNG — and nobody else, because inventing 200 addresses would
+        # be inventing 200 facts.
+        demo_email = get_settings().demo_patient_email.strip()
+        if demo_email:
+            patients[0].email = demo_email
+
         db.add_all(patients)
         await db.flush()
 
@@ -452,6 +461,12 @@ async def main() -> None:
         print(f"seeded {len(hospitals)} hospitals, {doctor_count} doctors, 200 patients")
         print(f"        {slots} slots, {appointments} appointments ({DEMO_BADGE} is the busy one)")
         print(f"admin login: {ADMIN_PHONE} / {ADMIN_PASSWORD}")
+        print(f"patient login: {patients[0].phone} (phone OTP)", end="")
+        print(
+            f" or {demo_email} (email OTP)"
+            if demo_email
+            else " — set DEMO_PATIENT_EMAIL for email OTP"
+        )
 
 
 if __name__ == "__main__":

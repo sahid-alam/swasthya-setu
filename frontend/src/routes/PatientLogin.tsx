@@ -11,6 +11,10 @@ export default function PatientLogin() {
   const nav = useNavigate();
   const [lang, setLangState] = useState<Lang>(getLang());
   const [phone, setPhone] = useState("");
+  // Phone is the default because it is what most patients in Himachal have; email is
+  // the way in for someone whose handset drops SMS.
+  const [via, setVia] = useState<"phone" | "email">("phone");
+  const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [stage, setStage] = useState<"phone" | "code">("phone");
   const [note, setNote] = useState("");
@@ -18,6 +22,8 @@ export default function PatientLogin() {
   const [busy, setBusy] = useState(false);
 
   const say = (k: Parameters<typeof t>[1]) => t(lang, k);
+  // The API takes exactly one of the two; sending both is a 422.
+  const contact = () => (via === "phone" ? { phone } : { email });
 
   async function requestCode(e: React.FormEvent) {
     e.preventDefault();
@@ -27,7 +33,7 @@ export default function PatientLogin() {
       await fetch("/api/v1/auth/otp/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify(contact()),
       });
       // the answer is the same whether or not the number is on file, by design
       setNote(say("codeSent"));
@@ -45,7 +51,7 @@ export default function PatientLogin() {
       const res = await fetch("/api/v1/auth/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code }),
+        body: JSON.stringify({ ...contact(), code }),
       });
       if (!res.ok) {
         setError(say("codeWrong"));
@@ -83,19 +89,40 @@ export default function PatientLogin() {
 
         {stage === "phone" ? (
           <form onSubmit={requestCode} className="mt-6 grid gap-4">
-            <FieldBlock label={say("phoneLabel")}>
-              <Input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                inputMode="numeric"
-                autoComplete="tel"
-                className="min-h-[48px] text-[17px]"
-                required
-              />
-            </FieldBlock>
+            {via === "phone" ? (
+              <FieldBlock label={say("phoneLabel")}>
+                <Input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  className="min-h-[48px] text-[17px]"
+                  required
+                />
+              </FieldBlock>
+            ) : (
+              <FieldBlock label={say("emailLabel")}>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  inputMode="email"
+                  autoComplete="email"
+                  className="min-h-[48px] text-[17px]"
+                  required
+                />
+              </FieldBlock>
+            )}
             <Button type="submit" variant="accent" size="lg" disabled={busy}>
               {say("sendCode")}
             </Button>
+            <button
+              type="button"
+              onClick={() => setVia(via === "phone" ? "email" : "phone")}
+              className="min-h-[48px] text-[15px] text-primary underline"
+            >
+              {say(via === "phone" ? "useEmail" : "usePhone")}
+            </button>
           </form>
         ) : (
           <form onSubmit={verify} className="mt-6 grid gap-4">

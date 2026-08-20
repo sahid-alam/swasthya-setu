@@ -10,7 +10,7 @@ PostgreSQL 16. All tables: `id UUID PK default gen_random_uuid()`, `created_at`,
 **departments** — hospital_id FK, name, specialty_code, room_count
 **users** — name, phone (unique), email?, password_hash?, role(enum: ADMIN|DOCTOR|STAFF|PATIENT), hospital_id FK?
 **doctors** — user_id FK, hospital_id FK, department_id FK, specialty, badge_id (unique; what BLE/RFID track), face_enrolled bool, face_embedding jsonb? (voluntary enrolment; the vector only, never an image), avg_consult_minutes
-**patients** — user_id FK?, name, phone, age, gender, village/district, priority_flags jsonb (elderly, disabled, pregnant…), preferred_language(enum: HI|EN)
+**patients** — user_id FK?, name, phone, email? (nullable, not unique — an inbox is the exception here and a family may share one; `ix_patients_email_lower` for the case-insensitive lookup email OTP does), age, gender, village/district, priority_flags jsonb (elderly, disabled, pregnant…), preferred_language(enum: HI|EN)
 
 ## Presence (M1)
 
@@ -23,7 +23,7 @@ PostgreSQL 16. All tables: `id UUID PK default gen_random_uuid()`, `created_at`,
 ## Scheduling (M2)
 
 **slots** — doctor_id FK, department_id FK, starts_at, ends_at, capacity smallint (>1 = overbook allowance), status(enum: OPEN|FULL|BLOCKED)
-**appointments** — patient_id FK, slot_id FK, hospital_id FK, department_id FK, channel(enum: PWA|WHATSAPP|SMS|IVR|VOICE|KIOSK|STAFF), priority_class(enum: EMERGENCY|REFERRED|PRIORITY|GENERAL), status(enum: BOOKED|CHECKED_IN|IN_CONSULT|COMPLETED|NO_SHOW|CANCELLED|RESCHEDULED|RESCHEDULE_PENDING — a replan could not seat them; still owed an appointment), token_number, noshow_prob numeric?, predicted_wait_min int?, rescheduled_from FK(appointments)?  · *index (slot_id), (patient_id, status)*
+**appointments** — patient_id FK, slot_id FK, hospital_id FK, department_id FK, channel(enum: PWA|WHATSAPP|SMS|IVR|VOICE|KIOSK|STAFF|EMAIL), priority_class(enum: EMERGENCY|REFERRED|PRIORITY|GENERAL), status(enum: BOOKED|CHECKED_IN|IN_CONSULT|COMPLETED|NO_SHOW|CANCELLED|RESCHEDULED|RESCHEDULE_PENDING — a replan could not seat them; still owed an appointment), token_number, noshow_prob numeric?, predicted_wait_min int?, rescheduled_from FK(appointments)?  · *index (slot_id), (patient_id, status)*
 **queue_entries** — appointment_id FK (unique), department_id FK, position int, checked_in_at, called_at?, state(enum: WAITING|CALLED|SERVING|DONE|SKIPPED)
 **plan_runs** — trigger(enum: PRESENCE_CHANGE|MANUAL|PERIODIC), scope jsonb, solver_status, objective numeric, duration_ms, moved_count — every CP-SAT run, for the "<5s" claim
 **notifications** — appointment_id FK?, patient_id FK, channel, template, payload jsonb, mock bool, status(enum: QUEUED|SENT|DELIVERED|FAILED), sent_at — the demo "outbox"

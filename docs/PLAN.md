@@ -84,6 +84,12 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
   Three options per menu, not five: a caller has no screen to scroll. Verified end-to-end
   with `simulators/ivr_call.py` in both languages — confirmed appointments with
   `channel=IVR` and a `booked` receipt in the outbox. No `ivr_real.py`: no credentials yet.
+- [x] **Email OTP with real SMTP** (owner decision 2026-08-21, added to Phase 2) — second
+  way into the patient app beside phone OTP, on the same service and the same JWT.
+  `email_mock.py` is the default; `EMAIL_MOCK_MODE=false` + the `SMTP_*` block sends
+  through a real relay (Gmail app password). Phone and email are separate Redis
+  namespaces, so a code mailed to an inbox can never be spent against a phone number.
+  Migration `0004`: `patients.email` + `EMAIL` on the channel enum.
 - [ ] Bhashini voice booking (constrained intent flow, mock mode + sandbox)
 - [ ] Outbound TTS reschedule calls (mock mode)
 - [ ] Kiosk mode skin for PWA

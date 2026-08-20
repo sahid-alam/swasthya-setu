@@ -108,6 +108,7 @@ class Channel(StrEnum):
     VOICE = "VOICE"
     KIOSK = "KIOSK"
     STAFF = "STAFF"
+    EMAIL = "EMAIL"
 
 
 class PriorityClass(StrEnum):
@@ -269,6 +270,9 @@ class Patient(Base):
     user_id: Mapped[uuid.UUID | None] = fk("users.id", nullable=True)
     name: Mapped[str] = mapped_column(String(160))
     phone: Mapped[str] = mapped_column(String(20), index=True)
+    # Nullable and deliberately not unique: an inbox is the exception here, not the
+    # rule, and a family sharing one address is normal.
+    email: Mapped[str | None] = mapped_column(String(160), nullable=True)
     age: Mapped[int | None] = mapped_column(SmallInteger)
     gender: Mapped[str | None] = mapped_column(String(16))
     village: Mapped[str | None] = mapped_column(String(120))

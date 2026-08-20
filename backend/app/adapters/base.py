@@ -138,6 +138,47 @@ def render(template: str, params: dict, language: str = "EN") -> str:
         raise AdapterError(f"template {template} needs {exc}") from exc
 
 
+# Subjects live here with the bodies (D21): a channel that wrote its own would drift
+# from the others, and an OTP whose subject says something different from its body is
+# the one message a patient reads twice.
+SUBJECTS = {
+    "EN": {
+        "otp": "Your Swasthya-Setu login code",
+        "booked": "Your appointment is confirmed",
+        "rescheduled": "Your appointment has moved",
+        "reschedule_pending": "About your appointment today",
+        "cancelled": "Your appointment has been cancelled",
+        "reminder": "Reminder: your appointment",
+    },
+    "HI": {
+        "otp": "आपका स्वास्थ्य-सेतु लॉगिन कोड",
+        "booked": "आपका अपॉइंटमेंट तय हो गया है",
+        "rescheduled": "आपका अपॉइंटमेंट बदल गया है",
+        "reschedule_pending": "आज के आपके अपॉइंटमेंट के बारे में",
+        "cancelled": "आपका अपॉइंटमेंट रद्द कर दिया गया है",
+        "reminder": "याद दिलाने के लिए: आपका अपॉइंटमेंट",
+    },
+}
+
+
+def subject(template: str, language: str = "EN") -> str:
+    table = SUBJECTS.get(language.upper(), SUBJECTS["EN"])
+    line = table.get(template) or SUBJECTS["EN"].get(template)
+    if line is None:
+        raise AdapterError(f"no subject for template {template}")
+    return line
+
+
+def normalise_email(raw: str) -> str:
+    """Lower-cased and trimmed. Deliberately not an RFC 5322 validator — putting that
+    in a regex is a well-known way to reject real addresses. The SMTP server is the
+    thing that actually decides, and it tells us."""
+    addr = raw.strip().lower()
+    if addr.count("@") != 1 or " " in addr or "." not in addr.partition("@")[2]:
+        raise AdapterError(f"that does not look like an email address: {raw!r}")
+    return addr
+
+
 def normalise_phone(raw: str) -> str:
     """India: 10 digits, optionally +91 prefixed. Vendors want E.164."""
     digits = "".join(c for c in raw if c.isdigit())

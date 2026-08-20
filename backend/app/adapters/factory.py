@@ -6,6 +6,7 @@ from __future__ import annotations
 from functools import cache
 
 from app.adapters.base import MessagingAdapter, TelephonyAdapter
+from app.adapters.email_mock import MockEmail
 from app.adapters.ivr_mock import MockExotel
 from app.adapters.sms_mock import MockSms
 from app.adapters.whatsapp_mock import MockWhatsApp
@@ -22,6 +23,12 @@ def messaging(channel: Channel) -> MessagingAdapter:
         from app.adapters.sms_real import Msg91Sms  # imported only when actually used
 
         return Msg91Sms()
+    if channel == Channel.EMAIL:
+        if settings.email_mock_mode:
+            return MockEmail()
+        from app.adapters.email_smtp import SmtpEmail  # imported only when actually used
+
+        return SmtpEmail()
     if channel == Channel.WHATSAPP:
         if settings.whatsapp_mock_mode:
             return MockWhatsApp()
@@ -47,4 +54,5 @@ def mock_mode(channel: Channel) -> bool:
         Channel.SMS: settings.sms_mock_mode,
         Channel.WHATSAPP: settings.whatsapp_mock_mode,
         Channel.IVR: settings.telephony_mock_mode,
+        Channel.EMAIL: settings.email_mock_mode,
     }.get(channel, True)
