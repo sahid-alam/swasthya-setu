@@ -31,10 +31,11 @@ from app.models import (
 log = logging.getLogger("swasthya.notify")
 
 # A patient reached on one channel does not need the next; try in order and stop at the
-# first success. Cheapest and most capable first, SMS last because it always works and
-# always costs money. Telegram leads only for patients who linked a chat — everyone
-# else has no Telegram address and is skipped without an attempt.
-CHANNEL_ORDER = [Channel.TELEGRAM, Channel.WHATSAPP, Channel.SMS]
+# first success. Free and immediate first, SMS last because it always works and always
+# costs money. Email sits ahead of SMS but behind the chat apps: in Himachal a phone is
+# read within minutes and an inbox may not be read for a day. A patient with no address
+# — or no linked chat — is skipped without an attempt rather than failed.
+CHANNEL_ORDER = [Channel.TELEGRAM, Channel.WHATSAPP, Channel.EMAIL, Channel.SMS]
 
 
 async def notify_appointment(

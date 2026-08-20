@@ -39,6 +39,93 @@ from app.models import Channel, NotificationStatus
 
 log = logging.getLogger("swasthya.email")
 
+# DESIGN.md §1 tokens, inlined because email clients strip <style> and know nothing of
+# CSS variables. Tables and inline styles are not nostalgia — Outlook still requires
+# them, and this has to survive being forwarded to a district health officer.
+INK, PRIMARY, ACCENT = "#0a0e14", "#0f4c81", "#00c49f"
+BG, SURFACE, LINE, MUTED = "#f5f7fb", "#ffffff", "#e3e8f0", "#6b7588"
+
+HTML = """\
+<!doctype html>
+<html><body style="margin:0;padding:24px 12px;background:{bg};
+  font-family:-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:{ink}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+  style="max-width:520px;background:{surface};border:1px solid {line};border-radius:12px">
+  <tr><td style="padding:20px 28px;border-bottom:3px solid {accent};background:{primary};
+    border-radius:12px 12px 0 0">
+    <div style="font-size:18px;font-weight:600;color:#ffffff;letter-spacing:-0.01em">
+      स्वास्थ्य-सेतु <span style="opacity:.7;font-weight:400">· Swasthya-Setu</span></div>
+    <div style="font-size:12px;color:#c8d8ea;margin-top:2px">{tagline}</div>
+  </td></tr>
+  <tr><td style="padding:28px">
+    <div style="font-size:17px;font-weight:600;margin-bottom:12px">{subject}</div>
+    <div style="font-size:15px;line-height:1.6;color:{ink}">{body}</div>
+    {feature}
+  </td></tr>
+  <tr><td style="padding:16px 28px;border-top:1px solid {line};font-size:12px;color:{muted};
+    background:#fafbfd;border-radius:0 0 12px 12px">
+    {footer}
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>"""
+
+CODE_BLOCK = """
+<div style="margin:22px 0;padding:16px;text-align:center;background:#e7eef8;
+  border:1px dashed {primary};border-radius:10px">
+  <div style="font-size:12px;color:{muted};letter-spacing:.08em;text-transform:uppercase">
+    {label}</div>
+  <div style="font-family:'SF Mono',Menlo,Consolas,monospace;font-size:32px;font-weight:700;
+    letter-spacing:.28em;color:{primary};margin-top:6px">{code}</div>
+</div>"""
+
+# Deliberately no claim of official standing. "Himachal Pradesh hospital network" in a
+# real inbox reads as a government service, and we are not one — a subtitle is not the
+# place to borrow authority we do not have.
+TAGLINE = {
+    "EN": "Appointment service",
+    "HI": "अपॉइंटमेंट सेवा",
+}
+FOOTER = {
+    "EN": "This is an automated message. Please do not reply to it.",
+    "HI": "यह एक स्वचालित संदेश है। कृपया इसका उत्तर न दें।",
+}
+CODE_LABEL = {"EN": "Your login code", "HI": "आपका लॉगिन कोड"}
+
+
+def as_html(subject_line: str, body: str, template: str, params: dict, language: str) -> str:
+    """The same words as the plain-text part, in a shape that does not look like spam.
+
+    The words themselves still come from `render()` (D21) — this only dresses them, so
+    an email can never say something the SMS does not.
+    """
+    feature = ""
+    if template == "otp" and params.get("code"):
+        # The code is the whole message; a patient should not have to read a sentence
+        # to find six digits.
+        feature = CODE_BLOCK.format(
+            primary=PRIMARY,
+            muted=MUTED,
+            label=CODE_LABEL.get(language.upper(), CODE_LABEL["EN"]),
+            code=params["code"],
+        )
+    return HTML.format(
+        bg=BG,
+        ink=INK,
+        surface=SURFACE,
+        line=LINE,
+        accent=ACCENT,
+        primary=PRIMARY,
+        muted=MUTED,
+        tagline=TAGLINE.get(language.upper(), TAGLINE["EN"]),
+        footer=FOOTER.get(language.upper(), FOOTER["EN"]),
+        subject=subject_line,
+        body=body.replace("\n", "<br>"),
+        feature=feature,
+    )
+
+
 # Two attempts, not three: the failures worth retrying here are a dropped connection
 # or a greylist, and an auth rejection will fail identically however many times you ask.
 ATTEMPTS = 2
@@ -68,8 +155,16 @@ class SmtpEmail(MessagingAdapter):
         message["Date"] = formatdate(localtime=True)
         message["Message-ID"] = make_msgid(domain=self._s.smtp_username.split("@")[-1])
         message["Auto-Submitted"] = "auto-generated"  # RFC 3834: this is transactional
-        message["Subject"] = subject(template, language)
-        message.set_content(render(template, params, language))
+        subject_line = subject(template, language)
+        text = render(template, params, language)
+        message["Subject"] = subject_line
+        # Plain text first, HTML as the alternative: a client that cannot render HTML
+        # still gets the whole message, and multipart/alternative is what ordinary mail
+        # looks like.
+        message.set_content(text)
+        message.add_alternative(
+            as_html(subject_line, text, template, params, language), subtype="html"
+        )
 
         last: Exception | None = None
         for attempt in range(1, ATTEMPTS + 1):
@@ -86,7 +181,7 @@ class SmtpEmail(MessagingAdapter):
                     payload={
                         "to": address,
                         "subject": message["Subject"],
-                        "body": message.get_content(),
+                        "body": text,
                     },
                 )
             except RETRYABLE as exc:
@@ -104,7 +199,7 @@ class SmtpEmail(MessagingAdapter):
             payload={
                 "to": address,
                 "subject": message["Subject"],
-                "body": message.get_content(),
+                "body": text,
             },
         )
 
