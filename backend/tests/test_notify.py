@@ -94,6 +94,8 @@ async def test_sms_takes_over_when_whatsapp_refuses(monkeypatch):
     class FakePatient:
         id = "00000000-0000-0000-0000-000000000000"
         phone = "9418000001"
+        email = None
+        telegram_chat_id = None  # nobody has linked a chat, so Telegram is skipped
 
     class FakeDb:
         def __init__(self):
@@ -106,6 +108,8 @@ async def test_sms_takes_over_when_whatsapp_refuses(monkeypatch):
             return None
 
     written = await notify._fan_out(FakeDb(), None, FakePatient(), "booked", PARAMS)
+    # Telegram leads the order but this patient has no linked chat, so it is skipped
+    # outright — no attempt, no FAILED row for something that was never addressable.
     assert [n.channel for n in written] == [Channel.WHATSAPP, Channel.SMS]
     assert written[0].status == NotificationStatus.FAILED
     assert written[1].status == NotificationStatus.SENT, "SMS should have picked it up"

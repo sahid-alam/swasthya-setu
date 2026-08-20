@@ -72,8 +72,21 @@ async def _within_rate_limit(kind: str, value: str) -> bool:
     return count <= MAX_REQUESTS_PER_WINDOW
 
 
+def _otp_channel(kind: str, via: str | None, patient: Patient) -> Channel:
+    """Where this one code goes. Telegram only if they asked for it and linked a chat;
+    silently downgrading to SMS would be cheaper and would also be a surprise."""
+    if kind == "email":
+        return Channel.EMAIL
+    if via == "telegram" and patient.telegram_chat_id:
+        return Channel.TELEGRAM
+    return Channel.SMS
+
+
 async def request_code(
-    db: AsyncSession, phone: str | None = None, email: str | None = None
+    db: AsyncSession,
+    phone: str | None = None,
+    email: str | None = None,
+    via: str | None = None,
 ) -> bool:
     """Returns whether a code was actually sent. Callers must NOT surface that to the
     client — the response has to look the same for a contact we do not have."""
@@ -97,15 +110,16 @@ async def request_code(
         {"code": code, "patient_id": str(patient.id), "attempts": 0},
         CODE_TTL_SECONDS,
     )
-    # The code goes to the contact that asked for it, and nowhere else: an OTP that
-    # fans out to a second channel is an OTP delivered to whoever holds either one.
-    # (WhatsApp is excluded on top of that — it needs opt-in and template approval.)
+    # Exactly one channel, never a fan-out: an OTP sent to two places is an OTP
+    # delivered to whoever holds either one. A patient who asked for it on Telegram
+    # gets it there — the chat is linked to this phone number by Telegram's own
+    # verified contact share, so it is the same claim SMS makes, not a weaker one.
     await notify.send_raw(
         db,
         patient=patient,
         template="otp",
         params={"code": code, "minutes": CODE_TTL_SECONDS // 60},
-        channels=[Channel.SMS if kind == "phone" else Channel.EMAIL],
+        channels=[_otp_channel(kind, via, patient)],
     )
     return True
 

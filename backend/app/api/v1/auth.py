@@ -59,7 +59,9 @@ class OtpContact(BaseModel):
 
 
 class OtpRequestIn(OtpContact):
-    pass
+    # "telegram" delivers the code to the chat this patient linked, if they linked one.
+    # Anything else, including nothing, means the usual SMS.
+    via: str | None = Field(default=None, max_length=16)
 
 
 class OtpRequestOut(BaseModel):
@@ -80,7 +82,7 @@ async def request_otp(body: OtpRequestIn, db: AsyncSession = Depends(get_db)) ->
     anything — including the wording, which must not name the channel we tried.
     Rate limiting lives in the service.
     """
-    await otp.request_code(db, phone=body.phone, email=body.email)
+    await otp.request_code(db, phone=body.phone, email=body.email, via=body.via)
     await db.commit()
     return OtpRequestOut(
         sent=True,

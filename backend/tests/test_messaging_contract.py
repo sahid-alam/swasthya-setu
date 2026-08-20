@@ -13,6 +13,7 @@ import pytest
 from app.adapters.base import AdapterError, DeliveryResult
 from app.adapters.email_mock import MockEmail
 from app.adapters.sms_mock import MockSms
+from app.adapters.telegram_mock import MockTelegram
 from app.adapters.whatsapp_mock import MockWhatsApp
 from app.models import NotificationStatus
 
@@ -22,7 +23,18 @@ CASES = [
     pytest.param(MockSms, "9418000001", id="sms-mock"),
     pytest.param(MockWhatsApp, "9418000001", id="whatsapp-mock"),
     pytest.param(MockEmail, "someone@example.test", id="email-mock"),
+    pytest.param(MockTelegram, "987654321", id="telegram-mock"),
 ]
+
+if os.environ.get("TELEGRAM_BOT_TOKEN") and os.environ.get("TELEGRAM_TEST_CHAT_ID"):
+    from app.adapters.telegram_real import TelegramBot
+
+    CASES.append(pytest.param(TelegramBot, os.environ["TELEGRAM_TEST_CHAT_ID"], id="telegram-real"))
+
+if os.environ.get("SMS_GATEWAY_URL") and os.environ.get("SMS_TEST_RECIPIENT"):
+    from app.adapters.sms_real import GatewaySms
+
+    CASES.append(pytest.param(GatewaySms, os.environ["SMS_TEST_RECIPIENT"], id="sms-real"))
 
 if os.environ.get("WHATSAPP_TOKEN") and os.environ.get("WHATSAPP_PHONE_NUMBER_ID"):
     from app.adapters.whatsapp_real import CloudApiWhatsApp

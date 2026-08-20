@@ -29,6 +29,16 @@ class Settings(BaseSettings):
     whatsapp_mock_mode: bool = True
     telephony_mock_mode: bool = True  # Exotel: IVR now, outbound TTS calls later
     email_mock_mode: bool = True  # false needs the SMTP_* block below
+    telegram_mock_mode: bool = True  # false needs TELEGRAM_BOT_TOKEN
+
+    # Only read when sms_mock_mode is false: an Android running the Traccar SMS
+    # Gateway app, reachable on the LAN (never localhost from inside compose).
+    sms_gateway_url: str = ""
+    sms_gateway_token: str = ""
+
+    # Only read when telegram_mock_mode is false.
+    telegram_bot_token: str = ""
+    telegram_bot_username: str = "Swasthya_Setu_bot"
 
     # Only read when whatsapp_mock_mode is false.
     whatsapp_token: str = ""

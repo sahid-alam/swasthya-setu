@@ -9,6 +9,7 @@ from app.adapters.base import MessagingAdapter, TelephonyAdapter
 from app.adapters.email_mock import MockEmail
 from app.adapters.ivr_mock import MockExotel
 from app.adapters.sms_mock import MockSms
+from app.adapters.telegram_mock import MockTelegram
 from app.adapters.whatsapp_mock import MockWhatsApp
 from app.config import get_settings
 from app.models import Channel
@@ -20,15 +21,21 @@ def messaging(channel: Channel) -> MessagingAdapter:
     if channel == Channel.SMS:
         if settings.sms_mock_mode:
             return MockSms()
-        from app.adapters.sms_real import Msg91Sms  # imported only when actually used
+        from app.adapters.sms_real import GatewaySms  # imported only when actually used
 
-        return Msg91Sms()
+        return GatewaySms()
     if channel == Channel.EMAIL:
         if settings.email_mock_mode:
             return MockEmail()
         from app.adapters.email_smtp import SmtpEmail  # imported only when actually used
 
         return SmtpEmail()
+    if channel == Channel.TELEGRAM:
+        if settings.telegram_mock_mode:
+            return MockTelegram()
+        from app.adapters.telegram_real import TelegramBot  # imported only when used
+
+        return TelegramBot()
     if channel == Channel.WHATSAPP:
         if settings.whatsapp_mock_mode:
             return MockWhatsApp()
@@ -55,4 +62,5 @@ def mock_mode(channel: Channel) -> bool:
         Channel.WHATSAPP: settings.whatsapp_mock_mode,
         Channel.IVR: settings.telephony_mock_mode,
         Channel.EMAIL: settings.email_mock_mode,
+        Channel.TELEGRAM: settings.telegram_mock_mode,
     }.get(channel, True)

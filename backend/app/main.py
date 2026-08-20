@@ -18,10 +18,17 @@ log = logging.getLogger("swasthya")
 async def lifespan(_: FastAPI):
     """Presence has to decay whether or not anything is arriving — a beacon going
     flat produces silence, and silence must lower confidence, not preserve it."""
-    seconds = get_settings().presence_sweep_seconds
-    task = asyncio.create_task(sweep_forever(seconds)) if seconds > 0 else None
+    settings = get_settings()
+    seconds = settings.presence_sweep_seconds
+    tasks = [asyncio.create_task(sweep_forever(seconds))] if seconds > 0 else []
+    if not settings.telegram_mock_mode:
+        # Only in live mode: polling Telegram with no token would be a background task
+        # failing every five seconds behind a demo that otherwise looks fine.
+        from app.services.telegram_link import poll_forever
+
+        tasks.append(asyncio.create_task(poll_forever()))
     yield
-    if task:
+    for task in tasks:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task

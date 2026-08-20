@@ -30,9 +30,11 @@ from app.models import (
 
 log = logging.getLogger("swasthya.notify")
 
-# A patient reached on WhatsApp does not also need an SMS; try in order and stop at
-# the first success. SMS last because it always works and always costs money.
-CHANNEL_ORDER = [Channel.WHATSAPP, Channel.SMS]
+# A patient reached on one channel does not need the next; try in order and stop at the
+# first success. Cheapest and most capable first, SMS last because it always works and
+# always costs money. Telegram leads only for patients who linked a chat — everyone
+# else has no Telegram address and is skipped without an attempt.
+CHANNEL_ORDER = [Channel.TELEGRAM, Channel.WHATSAPP, Channel.SMS]
 
 
 async def notify_appointment(
@@ -77,7 +79,12 @@ async def _fan_out(
     for channel in channels or CHANNEL_ORDER:
         # Where a channel reaches this patient. Email is the only one that is not the
         # phone number, and a patient without an address simply has no email channel.
-        to = patient.email if channel == Channel.EMAIL else patient.phone
+        if channel == Channel.EMAIL:
+            to = patient.email
+        elif channel == Channel.TELEGRAM:
+            to = patient.telegram_chat_id
+        else:
+            to = patient.phone
         if not to:
             log.warning("no %s address for patient %s", channel.value, patient.id)
             continue

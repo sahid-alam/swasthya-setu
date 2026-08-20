@@ -109,6 +109,7 @@ class Channel(StrEnum):
     KIOSK = "KIOSK"
     STAFF = "STAFF"
     EMAIL = "EMAIL"
+    TELEGRAM = "TELEGRAM"
 
 
 class PriorityClass(StrEnum):
@@ -273,6 +274,9 @@ class Patient(Base):
     # Nullable and deliberately not unique: an inbox is the exception here, not the
     # rule, and a family sharing one address is normal.
     email: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    # Not a number we chose: Telegram hands it to us when the patient shares their
+    # contact, and it is the only way a bot may address them (services/telegram_link).
+    telegram_chat_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     age: Mapped[int | None] = mapped_column(SmallInteger)
     gender: Mapped[str | None] = mapped_column(String(16))
     village: Mapped[str | None] = mapped_column(String(120))

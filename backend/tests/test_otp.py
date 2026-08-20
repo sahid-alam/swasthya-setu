@@ -258,6 +258,11 @@ def test_a_live_adapter_with_no_credentials_degrades_rather_than_500s(
 
     settings = get_settings()
     settings.email_mock_mode = False
+    # Blank the credentials too. Once a real SMTP block exists in .env, flipping the
+    # flag alone makes this test send actual mail to example.test — slow, flaky, and
+    # it writes a mock=False row that the outbox tests downstream then trip over.
+    smtp = settings.smtp_host, settings.smtp_username, settings.smtp_password
+    settings.smtp_host = settings.smtp_username = settings.smtp_password = ""
     factory.messaging.cache_clear()
     try:
         r = client.post("/api/v1/auth/otp/request", json={"email": emailed_patient})
@@ -268,4 +273,5 @@ def test_a_live_adapter_with_no_credentials_degrades_rather_than_500s(
         assert rows[0]["channel"] == "EMAIL" and rows[0]["status"] == "FAILED"
     finally:
         settings.email_mock_mode = True
+        settings.smtp_host, settings.smtp_username, settings.smtp_password = smtp
         factory.messaging.cache_clear()

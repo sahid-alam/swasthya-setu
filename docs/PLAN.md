@@ -116,7 +116,24 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
   `vapi-*.js` chunk explicitly excluded from the PWA precache — a patient on a budget
   Android must not download a voice agent they will never open. **Still blocked on the
   deployment**: with no `PUBLIC_BASE_URL` the assistant can talk but its tools cannot
-  reach us, so it cannot book. Re-run `vapi_setup.py` after deploying to wire them.
+  reach us. **D28: a `cloudflared` quick tunnel, not a deploy** — `make tunnel` opens
+  one, waits for the hostname, and re-points the assistant at it, refusing early if
+  `VAPI_TOOL_SECRET` is unset so it never wires an assistant at an endpoint that 503s.
+- [x] **Telegram channel** (owner decision 2026-08-21) — @Swasthya_Setu_bot, free, first
+  in `CHANNEL_ORDER`. Mock default; `TELEGRAM_MOCK_MODE=false` + `TELEGRAM_BOT_TOKEN`
+  goes live. A bot cannot address anyone by phone number, so migration `0005` adds
+  `patients.telegram_chat_id` and `services/telegram_link.py` links it from the contact
+  the patient shares with the bot — Telegram verifies that number itself, and a
+  forwarded contact (`user_id` ≠ sender) is refused. `getUpdates` polling, not a
+  webhook: no public URL, and nothing breaks when the tunnel restarts. OTP goes there
+  only when the patient asks (`via: "telegram"`) and has linked — still exactly one
+  channel per code, never a fan-out.
+- [x] **SMS live mode via an Android handset** (owner decision 2026-08-21) —
+  `sms_real.py` posts to the Traccar SMS Gateway app on the LAN
+  (`SMS_GATEWAY_URL`/`SMS_GATEWAY_TOKEN`), replacing the MSG91 adapter that was never
+  built. Retries three times, because the usual failure is a sleeping phone and it
+  often answers the second time. **Payload shape is from the app's docs, not yet
+  verified against a real handset** — one live send will confirm it. Mock stays default.
 - [ ] Bhashini voice booking (constrained intent flow, mock mode + sandbox)
 - [ ] Outbound TTS reschedule calls (mock mode)
 - [ ] Kiosk mode skin for PWA
