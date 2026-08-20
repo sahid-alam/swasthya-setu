@@ -1,14 +1,14 @@
 # Handoff — where the build is
 
-Written 2026-08-20. **Read this once, then work from `docs/PLAN.md`.**
+Written 2026-08-20, updated 2026-08-21. **Read this once, then work from `docs/PLAN.md`.**
 Everything below is state a fresh session cannot infer from the code in reasonable time.
 
 ## Status
 
-**Phase 0 and Phase 1 are complete.** 32 of 48 plan items ticked; the 16 remaining are
-all Phase 2 (Tier 2 modules) and Phase 3 (hardening).
+**Phase 0 and Phase 1 are complete, and Phase 2 has started.** 33 of 48 plan items
+ticked; the 15 remaining are the rest of Phase 2 (Tier 2 modules) and Phase 3.
 
-- 113 backend tests, 12 frontend tests, `make lint` clean, suite stable across repeat runs
+- 122 backend tests, 12 frontend tests, `make lint` clean, suite stable across repeat runs
 - `make demo-check` is **8/8** — that is the Iron Rule 4 guard, run it after anything
   touching the spine
 
@@ -48,9 +48,9 @@ demo itself runs on `dev-local`: seconds to start instead of minutes.
 | Presence engine (M1) | Signal ingestion, multi-signal fusion with decay, face kiosk matching, admin override, evidence trail |
 | Allocation (M2) | CP-SAT replan, worst case 176 ms vs a 5 s budget; every solve writes `plan_runs` |
 | ML | No-show on the **real** 110k dataset (AUC 0.735); wait-time on **synthetic** clinic days (MAE 15.0 vs naive 27.3), labelled SYNTHETIC everywhere |
-| Access (M3) | Channel-agnostic booking, WhatsApp guided flow, SMS, notification fan-out with a real outbox, patient PWA in Hindi/English with an offline queue, phone-OTP login |
+| Access (M3) | Channel-agnostic booking, WhatsApp guided flow, SMS, IVR keypad booking (mock telephony), notification fan-out with a real outbox, patient PWA in Hindi/English with an offline queue, phone-OTP login |
 | Command centre (M4) | Presence board with evidence drawer, queues with predicted waits, alerts, Leaflet map, scenario trigger panel |
-| Simulators | `simulators/` — personas, run_day, scenario, roster_feed, face_mock. External HTTP clients, never touch the DB |
+| Simulators | `simulators/` — personas, run_day, scenario, roster_feed, face_mock, ivr_call. External HTTP clients, never touch the DB |
 
 ## The five things that will waste your time if you do not know them
 
@@ -98,8 +98,9 @@ second-guessed:
   predicted wait, `demo-check` asserts on it, the i18n strings exist — nothing renders
   them. What a patient actually sees after a reschedule is the notification.
 - **"surge" scenario not built** — five scenarios shipped.
-- Kiosk skin (§9c), IVR, Bhashini, beds, referrals, blood, Prophet, Golden Hour: all
-  Phase 2, untouched.
+- Kiosk skin (§9c), Bhashini, outbound TTS, beds, referrals, blood, Prophet, Golden
+  Hour: the rest of Phase 2, untouched. IVR is done (mock telephony; no `ivr_real.py`
+  until Exotel credentials exist).
 
 ## Next
 

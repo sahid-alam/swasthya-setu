@@ -78,7 +78,12 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
 
 ## Phase 2 — Tier 2 (target: ~4 weeks part-time)
 
-- [ ] IVR adapter (Exotel, mock telephony) end-to-end booking
+- [x] IVR adapter (Exotel, mock telephony) end-to-end booking — `POST /channels/ivr/webhook`
+  takes the provider's `CallSid`/`From`/`Digits` shape, `adapters/ivr_mock.py` translates it,
+  and the keypad flow books through the same `services/booking.py` as every other channel.
+  Three options per menu, not five: a caller has no screen to scroll. Verified end-to-end
+  with `simulators/ivr_call.py` in both languages — confirmed appointments with
+  `channel=IVR` and a `booked` receipt in the outbox. No `ivr_real.py`: no credentials yet.
 - [ ] Bhashini voice booking (constrained intent flow, mock mode + sandbox)
 - [ ] Outbound TTS reschedule calls (mock mode)
 - [ ] Kiosk mode skin for PWA
@@ -442,3 +447,51 @@ before Phase 2.
 
 **Next session:** re-verify `make dev` on compose, then Phase 2 from the top —
 IVR adapter (Exotel, mock telephony).
+
+### 2026-08-21 (compose re-verified, Phase 2 opens with IVR)
+
+**`make dev` is verified.** Four containers up, `libgomp1` installs, both ML artifacts
+load through `../ml:/ml:ro` (`metrics/models` → `loaded: true`), alembic runs to `0003`,
+login works, `make demo-check` 8/8 against the containers (`OPTIMAL` 233 ms). Two things
+the next session needs: **stop brew postgres and redis first**, because compose publishes
+5432/6379 as well and will not bind otherwise; and the first build pulls ~500 MB and
+takes ~10 minutes, because xgboost drags in `nvidia-nccl-cu12` on linux. The `.venv`
+anonymous volume makes every build after that fast.
+
+**Found by running it: `demo_check.py`'s `psql()` swallowed failures.** It assumed the
+trust auth a local brew postgres gives, and compose's wants a password — so every query
+returned `""` and the first one surfaced ninety lines later as an unpack error. It now
+passes `PGPASSWORD` and raises with psql's own stderr. A guard that fails silently is
+worse than no guard.
+
+**Phase 2, item 1: IVR (Exotel, mock telephony) — done.** `POST /channels/ivr/webhook`
+takes the provider's `CallSid`/`From`/`Digits` payload; `adapters/ivr_mock.py` is the
+only thing that knows those names, and hands the flow a `CallTurn`. The keypad flow
+lives beside the WhatsApp one in `channels.py` and books through the same
+`services/booking.py` — a call is a third way to collect arguments, not a third booking
+implementation.
+
+Three decisions worth keeping:
+
+- **Three options per menu, not five.** WhatsApp lists five departments because the
+  patient can scroll back. A caller cannot, and nobody holds five spoken options in
+  their head.
+- **State before intent, again.** Every IVR input is a digit, so `1` means "book" at the
+  menu and "option one" while choosing. That is the same bug the WhatsApp flow was
+  written around, in voice form, and it has its own test.
+- **Silence replays the prompt and moves nothing.** The session stores the last thing
+  said; an empty or non-digit press replays it. Clearing state there is how a caller
+  ends up indexing a list they can no longer hear.
+
+No `ivr_real.py` (the skill says real second, and only with credentials) and no
+outbound `place_call` — that is its own PLAN item. `Channel.IVR` was already in the
+enum, so no migration.
+
+**Verified end to end, not just in tests:** `simulators/ivr_call.py 9823872276 1 1 1`
+against the running stack books a real appointment with `channel=IVR` and lands a
+`booked` receipt in the outbox; the same call from a Hindi-speaking patient's number is
+answered in Hindi, chosen from her record rather than by asking her to pick a language.
+122 backend tests, 12 frontend, lint clean, demo-check 8/8. The runbook has it as §15.
+
+**Next session:** Phase 2 item 2 — Bhashini voice booking (constrained intent flow,
+mock mode + sandbox).

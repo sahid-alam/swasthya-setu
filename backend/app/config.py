@@ -23,9 +23,10 @@ class Settings(BaseSettings):
     # them — a flag in this class is a flag that actually does something.
     sms_mock_mode: bool = True
     whatsapp_mock_mode: bool = True
+    telephony_mock_mode: bool = True  # Exotel: IVR now, outbound TTS calls later
 
-    # .env.example also lists COUCHDB_URL and the remaining *_MOCK_MODE flags; those
-    # arrive with their adapters.
+    # .env.example also lists the remaining *_MOCK_MODE flags; those arrive with their
+    # adapters.
 
 
 @lru_cache

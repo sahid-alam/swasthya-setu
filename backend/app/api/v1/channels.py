@@ -13,9 +13,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import events
+from app.adapters.base import CallTurn
+from app.adapters.factory import telephony
 from app.adapters.whatsapp_mock import MENU, parse_reply
 from app.db import get_db
-from app.models import Channel, Department, Hospital, Patient, UserRole
+from app.models import Channel, Department, Doctor, Hospital, Patient, Slot, User, UserRole
 from app.security import require_roles
 from app.services import booking, notify
 
@@ -189,3 +191,222 @@ async def _upcoming(db: AsyncSession, patient_id: uuid.UUID) -> str:
         )
     ).all()
     return "\n".join(f"{s.starts_at:%d %b %H:%M} — token {a.token_number or '—'}" for a, s in rows)
+
+
+# --------------------------------------------------------------- IVR (PRD §M3, Tier 2)
+#
+# A feature phone has no screen, so the flow differs from WhatsApp in the two ways that
+# matter: the caller hears three options, not five (nobody holds five in their head),
+# and every input is a digit, so "1" is ambiguous unless state is read before intent.
+
+CALL_TTL_SECONDS = 5 * 60  # a call is minutes long; an abandoned one costs nothing
+IVR_MAX_OPTIONS = 3
+
+PROMPTS = {
+    "EN": {
+        "menu": "Welcome to Swasthya-Setu. Press 1 to book an appointment. "
+        "Press 2 to hear your appointments.",
+        "unknown_caller": "We do not have this number on file. "
+        "Please visit the hospital reception once. Goodbye.",
+        "departments": "Choose a department. {options}",
+        "slots": "Choose a time. {options}",
+        "option": "Press {n} for {what}.",
+        "no_slots": "There are no open appointments this week. Please try again later. Goodbye.",
+        "booked": "Your appointment is confirmed with {doctor} on {when}. "
+        "Your token number is {token}. We have sent you a message. Goodbye.",
+        "failed": "Sorry, that time has just been taken. Goodbye.",
+        "upcoming": "Your appointments. {options} Goodbye.",
+        "no_upcoming": "You have no upcoming appointments. Goodbye.",
+        "again": "Sorry, I did not get that. ",
+    },
+    "HI": {
+        "menu": "स्वास्थ्य-सेतु में आपका स्वागत है। अपॉइंटमेंट बुक करने के लिए 1 दबाएं। "
+        "अपने अपॉइंटमेंट सुनने के लिए 2 दबाएं।",
+        "unknown_caller": "यह नंबर हमारे पास दर्ज नहीं है। कृपया एक बार अस्पताल के "
+        "रिसेप्शन पर आएं। धन्यवाद।",
+        "departments": "विभाग चुनें। {options}",
+        "slots": "समय चुनें। {options}",
+        "option": "{what} के लिए {n} दबाएं।",
+        "no_slots": "इस सप्ताह कोई अपॉइंटमेंट खाली नहीं है। कृपया बाद में कोशिश करें। धन्यवाद।",
+        "booked": "{when} को {doctor} के साथ आपका अपॉइंटमेंट तय हो गया है। "
+        "आपका टोकन नंबर {token} है। हमने आपको संदेश भेज दिया है। धन्यवाद।",
+        "failed": "क्षमा करें, यह समय अभी किसी और ने ले लिया है। धन्यवाद।",
+        "upcoming": "आपके अपॉइंटमेंट। {options} धन्यवाद।",
+        "no_upcoming": "आपका कोई आगामी अपॉइंटमेंट नहीं है। धन्यवाद।",
+        "again": "क्षमा करें, समझ नहीं आया। ",
+    },
+}
+
+
+def _say(lang: str, key: str, **params: object) -> str:
+    table = PROMPTS.get(lang.upper(), PROMPTS["EN"])
+    return table[key].format(**params)
+
+
+def _options(lang: str, labels: list[str]) -> str:
+    return " ".join(_say(lang, "option", n=i + 1, what=w) for i, w in enumerate(labels))
+
+
+def _call_key(call_id: str) -> str:
+    return f"chat:ivr:{call_id}"
+
+
+async def load_call(call_id: str) -> dict:
+    return await events.get_json(_call_key(call_id)) or {"state": "menu"}
+
+
+async def save_call(call_id: str, session: dict) -> None:
+    await events.set_json(_call_key(call_id), session, CALL_TTL_SECONDS)
+
+
+async def clear_call(call_id: str) -> None:
+    await events.delete(_call_key(call_id))
+
+
+class VoiceReplyOut(BaseModel):
+    """What the caller hears, in our words. A real Exotel adapter renders its own
+    applet payload from this and that swap changes this response model with it."""
+
+    say: str
+    gather: int | None = 1  # digits to collect; None when we are hanging up
+    hangup: bool = False
+    state: str
+    booked_appointment_id: str | None = None
+
+
+@router.post("/ivr/webhook", response_model=VoiceReplyOut)
+async def ivr_webhook(
+    payload: dict, db: AsyncSession = Depends(get_db), _=Depends(STAFF)
+) -> VoiceReplyOut:
+    """One keypress of one call. The provider's field names stop at the adapter."""
+    turn = telephony().parse_call(payload)
+    session = await load_call(turn.call_id)
+    reply = await _ivr_turn(db, turn, session)
+    if reply.hangup:
+        await clear_call(turn.call_id)
+    else:
+        session["say"] = reply.say  # replayed verbatim if the next press is not usable
+        await save_call(turn.call_id, session)
+    return reply
+
+
+async def _ivr_turn(db: AsyncSession, turn: CallTurn, session: dict) -> VoiceReplyOut:
+    patient = await _patient_for(db, turn.from_phone)
+    if patient is None:
+        return VoiceReplyOut(
+            say=_say("EN", "unknown_caller"), gather=None, hangup=True, state="unknown_caller"
+        )
+
+    lang = patient.preferred_language.value
+    state = session["state"]
+
+    # Silence, a nonsense press, or the call simply connecting: say the same thing
+    # again and do not move. Clearing state here is how a caller ends up indexing a
+    # list they can no longer hear — the digits version of the WhatsApp bug above.
+    if turn.digits is None:
+        prior = session.get("say")
+        return VoiceReplyOut(
+            say=(_say(lang, "again") + prior) if prior else _say(lang, "menu"),
+            state=state,
+        )
+
+    choice = int(turn.digits)
+
+    # State before intent: "1" while choosing a department is department one, not
+    # "start booking again".
+    if state == "choosing_department":
+        depts = session.get("departments", [])
+        if not 1 <= choice <= len(depts):
+            return VoiceReplyOut(say=_say(lang, "again") + session.get("say", ""), state=state)
+        offers = await booking.search_slots(
+            db, department_id=uuid.UUID(depts[choice - 1]), limit=IVR_MAX_OPTIONS
+        )
+        if not offers:
+            return VoiceReplyOut(
+                say=_say(lang, "no_slots"), gather=None, hangup=True, state="no_slots"
+            )
+        session.update(state="choosing_slot", slots=[str(o.slot_id) for o in offers])
+        return VoiceReplyOut(
+            say=_say(
+                lang,
+                "slots",
+                options=_options(
+                    lang,
+                    [f"{o.starts_at:%d %B, %H:%M}, {o.doctor_name}" for o in offers],
+                ),
+            ),
+            state=session["state"],
+        )
+
+    if state == "choosing_slot":
+        slots = session.get("slots", [])
+        if not 1 <= choice <= len(slots):
+            return VoiceReplyOut(say=_say(lang, "again") + session.get("say", ""), state=state)
+        try:
+            appt = await booking.book(
+                db,
+                patient_id=patient.id,
+                slot_id=uuid.UUID(slots[choice - 1]),
+                channel=Channel.IVR,
+            )
+        except booking.BookingError:
+            return VoiceReplyOut(say=_say(lang, "failed"), gather=None, hangup=True, state="failed")
+
+        # The SMS is the caller's only record — a feature phone has no confirmation
+        # screen to go back to.
+        await notify.notify_appointment(db, appt.id, "booked")
+        await db.commit()
+        slot = (await db.execute(select(Slot).where(Slot.id == appt.slot_id))).scalar_one()
+        doctor = (
+            await db.execute(
+                select(User.name)
+                .join(Doctor, Doctor.user_id == User.id)
+                .where(Doctor.id == slot.doctor_id)
+            )
+        ).scalar_one()
+        return VoiceReplyOut(
+            say=_say(
+                lang,
+                "booked",
+                doctor=doctor,
+                when=f"{slot.starts_at:%d %B, %H:%M}",
+                token=appt.token_number,
+            ),
+            gather=None,
+            hangup=True,
+            state="booked",
+            booked_appointment_id=str(appt.id),
+        )
+
+    if choice == 1:
+        rows = (
+            await db.execute(
+                select(Department, Hospital)
+                .join(Hospital, Hospital.id == Department.hospital_id)
+                .limit(IVR_MAX_OPTIONS)
+            )
+        ).all()
+        session.update(state="choosing_department", departments=[str(d.id) for d, _ in rows])
+        return VoiceReplyOut(
+            say=_say(
+                lang,
+                "departments",
+                options=_options(lang, [f"{d.name}, {h.name}" for d, h in rows]),
+            ),
+            state=session["state"],
+        )
+
+    if choice == 2:
+        listing = await _upcoming(db, patient.id)
+        return VoiceReplyOut(
+            say=(
+                _say(lang, "upcoming", options=listing.replace("\n", ". "))
+                if listing
+                else _say(lang, "no_upcoming")
+            ),
+            gather=None,
+            hangup=True,
+            state="upcoming",
+        )
+
+    return VoiceReplyOut(say=_say(lang, "again") + _say(lang, "menu"), state="menu")

@@ -40,6 +40,8 @@ Monolith-first: one FastAPI app with clean internal service modules, one React P
 
 **Shipped adapters.** `MessagingAdapter`: WhatsApp Cloud API (`whatsapp_mock.py`) and MSG91 SMS (`sms_mock.py`), both mock-only so far, selected by `WHATSAPP_MOCK_MODE` / `SMS_MOCK_MODE` (default `true`). `services/notify.py` tries WhatsApp then SMS and stops at the first success — SMS is last because it always works and always costs money. Every attempt, including failures, writes a `notifications` row.
 
+`TelephonyAdapter`: Exotel IVR (`ivr_mock.py`), selected by `TELEPHONY_MOCK_MODE` (default `true`). Only the inbound direction is abstracted, because that is the direction carrying a vendor payload: `parse_call()` turns the provider's `CallSid`/`From`/`Digits` into our `CallTurn`, and the reply goes back as our own `VoiceReplyOut`. A real `ivr_real.py` renders the provider's applet payload instead and changes that response model with it. The keypad flow lives in `api/v1/channels.py` and calls the same `services/booking.py` the PWA does — a call books through one implementation, not a third one.
+
 `adapters/base.py` defines per-domain interfaces (`MessagingAdapter`, `TelephonyAdapter`, `HealthRegistryAdapter`, `BloodBankAdapter`, `RoutingAdapter`). Each vendor gets `<vendor>_real.py` + `<vendor>_mock.py`; a factory reads `<VENDOR>_MOCK_MODE` env var. Mocks are first-class: they persist to the same tables (e.g., mock WhatsApp writes to `notifications` with `channel=whatsapp, mock=true`) and appear in a dev "outbox" UI so the demo can show messages without vendor accounts. Business logic imports only the interface. See `.claude/skills/integration-adapter/SKILL.md` before adding any integration.
 
 ## Scheduling design

@@ -276,7 +276,42 @@ wa 1         # -> "Confirmed. Token 32."         state: booked
 > exact same booking service the PWA calls. Swapping in the Meta Cloud API is a
 > credential, not a rewrite."
 
-### 15. "Did those thirty-nine patients actually get told?" (30s)
+### 15. A farmer with a feature phone — *PRD M3 accept #1* (45s)
+
+No smartphone, no data, no literacy assumption. Just a phone call.
+
+```bash
+backend/.venv/bin/python simulators/ivr_call.py 9823872276 1 1 1
+```
+
+Each line is what the caller hears; `1 1 1` is book, first department, first time.
+Drop the digits to press them yourself, one at a time.
+
+```
+♫ Welcome to Swasthya-Setu. Press 1 to book an appointment. Press 2 to hear your appointments.
+♫ Choose a department. Press 1 for General Medicine, Indira Gandhi Medical College. …
+♫ Choose a time. Press 1 for 20 August, 19:05, Dr. Mohan Rana. …
+♫ Your appointment is confirmed with Dr. Mohan Rana on 20 August, 19:05. Your token number is 5.
+```
+
+Now call as a Hindi-speaking patient — the language comes from her record, she is never
+asked to choose one:
+
+```bash
+backend/.venv/bin/python simulators/ivr_call.py 9868553803 1 1 1
+```
+
+> "Three options a menu, not five — a caller has no screen to scroll and cannot hold
+> five in their head. The simulator posts the same `CallSid`/`From`/`Digits` payload
+> Exotel posts, to the same webhook; swapping in the real line is a credential, not a
+> rewrite. And the booking went through the same service the PWA calls, so this
+> appointment is on the dashboard next to the others, marked as having come in by
+> phone."
+
+The caller has no screen to go back to, so the SMS is her only record — it is in the
+outbox from step 16, `template: booked`.
+
+### 16. "Did those thirty-nine patients actually get told?" (30s)
 
 This is the payoff of step 8 — go back to it after the replan.
 
@@ -315,14 +350,14 @@ New doctor, new time, `position` and `predicted_wait_minutes`.
 
 ## Part 4 — command centre (M4)
 
-### 16. Queues with predicted waits (20s)
+### 17. Queues with predicted waits (20s)
 
 `/queue`. Per department, in position order, each with a predicted wait.
 
 > "The wait number is the SYNTHETIC-labelled model from step 9. We would rather show
 > you a labelled estimate than an unlabelled one."
 
-### 17. Alerts — the screen an administrator actually leaves open (30s)
+### 18. Alerts — the screen an administrator actually leaves open (30s)
 
 `/alerts`:
 
@@ -332,7 +367,7 @@ New doctor, new time, `position` and `predicted_wait_minutes`.
 Three kinds: roster-vs-presence mismatch, queue overflow, and patients still pending a
 rebooking. Every one names the evidence and the number of patients behind it.
 
-### 18. The network map (20s)
+### 19. The network map (20s)
 
 `/map`. Facilities with live status across the HP road network.
 
@@ -340,7 +375,7 @@ rebooking. Every one names the evidence and the number of patients behind it.
 > and labels itself **'Basemap offline — positions are real'** — the markers, the
 > statuses and every number are ours and still correct."
 
-### 19. The remote control (20s)
+### 20. The remote control (20s)
 
 `/scenarios`, admin only. The five scenarios from Part 1 as buttons: *Doctor arrives*,
 *Walk to surgery*, *Beacon battery dies*, *Calls in sick*, *Roster is wrong*.
@@ -375,12 +410,13 @@ means every rehearsal is identical.
 
 ## What is NOT built yet (say so if asked)
 
-Everything above is Phase 1 and it is complete. Phase 2 is untouched: IVR (Exotel),
+Phase 1 is complete, and IVR (§15) is the first Phase 2 module. Still untouched:
 Bhashini voice booking, outbound TTS reschedule calls, the kiosk skin, bed management,
 referral reservations, the e-RaktKosh blood widget, the Prophet footfall forecast, the
 Golden Hour router, and the ABDM/eSanjeevani/108/e-Hospital adapter backbone.
 
-The patient queue-position screen (§15) and a "surge" scenario (§19) are the two gaps
-inside Phase 1. `make dev` (docker compose) has not been re-verified since the image
-gained `libgomp1` and the `../ml` mount — **present from `dev-local`**, which is what
-this runbook describes and what was rehearsed.
+The patient queue-position screen (§16) and a "surge" scenario (§20) are the two gaps
+inside Phase 1. `make dev` (docker compose) is verified and 8/8, but **present from
+`dev-local`** — it starts in seconds, and it is what this runbook describes and what was
+rehearsed. (There is no live phone line either: IVR runs in mock telephony, which is the
+point of `TELEPHONY_MOCK_MODE`.)

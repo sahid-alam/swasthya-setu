@@ -41,6 +41,41 @@ class MessagingAdapter(ABC):
         """Cheap reachability probe; must never raise."""
 
 
+@dataclass(frozen=True)
+class CallTurn:
+    """One webhook from a telephony provider, in our words rather than theirs.
+
+    `digits` is None when the call has just connected and the caller has not pressed
+    anything yet — which is also what an empty keypress looks like, and both mean the
+    same thing to the flow: say the prompt again.
+    """
+
+    call_id: str
+    from_phone: str
+    digits: str | None = None
+
+
+class TelephonyAdapter(ABC):
+    """A phone call arriving from a provider (Exotel), translated at this boundary.
+
+    Only the inbound direction is abstracted here, because that is the direction with
+    a vendor payload in it: the provider POSTs its own field names and this turns them
+    into a `CallTurn`. The reply goes back as our own domain shape — a real
+    `ivr_real.py` renders the provider's applet payload instead, and that swap changes
+    the webhook's response model with it.
+    """
+
+    channel: Channel
+
+    @abstractmethod
+    def parse_call(self, payload: dict) -> CallTurn:
+        """Provider webhook fields → `CallTurn`. Raises `AdapterError` if unusable."""
+
+    @abstractmethod
+    async def health(self) -> bool:
+        """Cheap reachability probe; must never raise."""
+
+
 def render(template: str, params: dict, language: str = "EN") -> str:
     """Message bodies live here so every channel says the same thing.
 
