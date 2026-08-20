@@ -116,11 +116,26 @@ async def poll_forever() -> None:
                     api_url(token, "getUpdates"),
                     params={"timeout": POLL_SECONDS, "offset": offset},
                 )
-                for item in (r.json().get("result") or []) if r.is_success else []:
+                if not r.is_success:
+                    # A revoked token or a second poller elsewhere (409) both land here,
+                    # and both are silent forever otherwise.
+                    log.warning("telegram getUpdates %s: %s", r.status_code, r.text[:200])
+                    await asyncio.sleep(5)
+                    continue
+                for item in r.json().get("result") or []:
                     offset = max(offset, int(item["update_id"]) + 1)
+                    log.info(
+                        "telegram update %s from chat %s",
+                        item.get("update_id"),
+                        ((item.get("message") or {}).get("chat") or {}).get("id"),
+                    )
                     await handle_update(http, token, item)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # the poller outlives any single bad update
-                log.warning("telegram poll failed, retrying: %s", exc)
+                # Type first: httpx timeouts stringify to "", so "%s" alone produced
+                # "telegram poll failed, retrying:" and told nobody anything.
+                log.warning(
+                    "telegram poll failed, retrying: %s: %s", type(exc).__name__, exc or "-"
+                )
                 await asyncio.sleep(5)
