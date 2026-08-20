@@ -336,3 +336,53 @@ an `../ml:/ml:ro` mount but has not been re-run). The demo runs on `dev-local`.
 
 **Next session picks up:** Phase 1D — queue view with predicted waits, alerts
 (roster-vs-presence mismatch), Leaflet network map, scenario triggers panel.
+
+### 2026-08-20 (later — D23 docs, Redis sessions, Phase 1D, patient OTP)
+
+**demo-check 7/7 after every item.** 113 backend + 12 frontend tests, lint clean.
+
+**D23 approved and applied.** CLAUDE.md, SCHEMA.md, ARCHITECTURE (diagram, offline
+strategy, ports) and PLAN now describe the localStorage outbox. The `couchdb` container
+and `COUCHDB_URL` are gone from compose — CouchDB existed only to serve PouchDB, and a
+dead service in `make dev` contradicts the rule we applied to unread config flags. Eight
+lines to restore if a read-cache ever needs it.
+
+**PRD.md still says "(PouchDB→CouchDB sync)" in §M3.** The hook blocks editing it, which
+is correct — that is a scope document. Someone should change it by hand, or decide the
+PRD wording stands and D23 is an implementation detail beneath it.
+
+**WhatsApp state is in Redis** (`chat:whatsapp:{phone}`, 30 min TTL, D24). Structured as
+load / run / save with exactly one persist point — the turn logic has eight return paths
+and sprinkling a save before each is how you get the one that forgets. Proved it properly:
+started a conversation, killed the backend mid-flow, started a new process, sent the next
+digit, and it booked. An unrecognised number now gets an answer but no stored key.
+
+**Phase 1D (dashboard).** Dock chrome per §4, queues with per-position predicted waits,
+alerts computed on read, Leaflet network map, scenario trigger panel. The panel calls the
+same public endpoints `simulators/scenario.py` calls, from the browser — nothing writes to
+the database directly, because a scenario button that cheated would make the demo a lie.
+
+**Iron Rule 4 catch on the map:** OSM basemap tiles need internet. Verified offline —
+zero tiles load, all three markers still place correctly. The map now detects tile failure
+and labels it rather than showing a blank rectangle; every number is in the table below.
+
+**Patient phone-OTP login (D25)** on the existing mock SMS adapter and existing JWT. Eleven
+tests cover the security properties, not just the happy path: `secrets` not `random`,
+constant-time compare, single use, dead after 3 wrong guesses, rate limited, identical
+response for an unknown number, code never in an HTTP response, SMS only, and a PATIENT
+token 403s on every staff endpoint.
+
+**Process, fourth and fifth occurrence:** blind `str.replace` bit twice more. Once a
+multi-file patch script died on an assertion *after* writing file A but *before* writing
+file B, leaving a half-applied change that typechecked and silently called the wrong
+endpoint. Use Edit for surgical changes; if a script must patch several files, assert
+every target up front, or verify each substitution landed afterwards.
+
+**Known gaps:**
+- Docker not re-verified since `libgomp1` + the `../ml:/ml:ro` mount. Deferred by decision.
+- "surge" scenario not built; five shipped.
+- Basemap needs internet (labelled, degrades cleanly).
+- The kiosk skin (§9c), IVR and Bhashini remain Phase 2.
+
+**Next session:** Phase 1 exit criteria — run the full spine demo three times clean, then
+Phase 2. Consider re-verifying compose first since it is the only untested path.
