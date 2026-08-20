@@ -26,6 +26,12 @@ the same 3 hospitals, 30 doctors and 200 patients every single time).
 
 Open <http://localhost:5173> and sign in: **9418000001 / setu-admin**
 
+> **Expect rows to fade back to grey.** At `SIM_SPEED=12` a signal ages out in ~25
+> seconds, so a doctor you "arrived" earlier will be grey again by the time you reach
+> step 5. That is the product working, not breaking — say so, or just re-run
+> `arrives` for that badge. Drop to `SIM_SPEED=4` if you want states to linger and
+> you are willing to wait ~75s for the decay step.
+
 ## The click path
 
 Keep the board on screen the whole time. It is WebSocket-driven — you never refresh.

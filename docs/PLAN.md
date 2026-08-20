@@ -175,7 +175,13 @@ the host `.venv` with `/app`-relative shebangs. Fixed with an anonymous volume o
 `/app/.venv`, the same guard `node_modules` already had. If a host venv ever breaks this
 way again: `uv venv --clear .venv && uv sync`.
 
-**Three fusion bugs found by running the thing, not reading it** — all now pinned by tests:
+**Tau is per signal *kind*, not per trust level:** RFID is 180s, shorter than BLE's 300s,
+because a gate tap is a boundary crossing (informative for a minute) while BLE is a
+repeated dwell signal. With RFID at 900s an old gate tap outlived the newer OPD pings and
+dragged the doctor back to the door a minute after arriving — visible on the board as a
+wobble. Pinned by `test_an_older_longer_lived_signal_does_not_resurrect_a_stale_location`.
+
+**Four fusion bugs found by running the thing, not reading it** — all now pinned by tests:
 - Summing observations per state meant 90 minutes of OPD pings could never be outvoted by
   one RFID tap at the theatre door, so *movement was undetectable*. Locations are mutually
   exclusive evidence: score is now max-per-place plus a capped corroboration bonus.

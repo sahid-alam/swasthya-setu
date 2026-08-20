@@ -211,3 +211,21 @@ def test_corroboration_cannot_overturn_a_stronger_single_source():
     many_weak = [obs(SignalSource.WIFI, PresenceState.PRESENT_ELSEWHERE, s) for s in (0, 5, 10, 15)]
     result = fuse([*many_weak, obs(SignalSource.RFID, PresenceState.IN_SURGERY)], None, NOW)
     assert result.state == PresenceState.IN_SURGERY
+
+
+def test_an_older_longer_lived_signal_does_not_resurrect_a_stale_location():
+    """A gate tap outlives a BLE ping (longer tau). Once the badge has been seen in
+    the OPD, the doctor is not at the gate any more — when the newer sighting ages
+    out the honest answer is the roster, not the older location."""
+    result = fuse(
+        [
+            obs(SignalSource.RFID, PresenceState.PRESENT_ELSEWHERE, ago_seconds=610),
+            obs(SignalSource.BLE, PresenceState.PRESENT_IN_DEPT, ago_seconds=600),
+        ],
+        PresenceState.PRESENT_IN_DEPT,
+        NOW,
+        current_state=PresenceState.PRESENT_IN_DEPT,
+        current_confidence=0.7,
+    )
+    assert result.state == PresenceState.PRESENT_IN_DEPT
+    assert result.evidence["degraded_to_roster"] is True

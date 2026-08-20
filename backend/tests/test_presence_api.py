@@ -28,9 +28,7 @@ def fresh_badge(client, auth):
         engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
         async with engine.begin() as conn:
             doctor_id = (
-                await conn.execute(
-                    text("select id from doctors where badge_id = :b"), {"b": badge}
-                )
+                await conn.execute(text("select id from doctors where badge_id = :b"), {"b": badge})
             ).scalar_one()
             for table in ("presence_signals", "presence_transitions"):
                 await conn.execute(
@@ -134,9 +132,7 @@ def test_walking_from_opd_to_surgery_flips_the_board(client, auth, roster, fresh
 def test_a_live_badge_beats_a_roster_that_says_on_leave(client, auth, roster, fresh_badge):
     """PRD §M1 accept: "why not just an attendance app?"."""
     badge = fresh_badge("HP-DOC-1014")
-    r = client.put(
-        "/api/v1/roster/shift", headers=auth, json={"badge_id": badge, "kind": "LEAVE"}
-    )
+    r = client.put("/api/v1/roster/shift", headers=auth, json={"badge_id": badge, "kind": "LEAVE"})
     assert r.status_code == 200
     assert r.json()["state"] == "ON_LEAVE", "with no signals, the roster is all we have"
 
@@ -208,9 +204,7 @@ def test_an_unenrolled_doctor_has_no_capture_to_replay(client, auth, roster):
 
 def test_a_stranger_is_not_matched_to_anyone(client, auth):
     stranger = [0.01] * 512
-    body = client.post(
-        "/api/v1/signals/face", headers=auth, json={"embedding": stranger}
-    ).json()
+    body = client.post("/api/v1/signals/face", headers=auth, json={"embedding": stranger}).json()
     assert body["matched"] is False
     assert body["doctor_id"] is None
 

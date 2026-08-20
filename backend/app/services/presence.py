@@ -43,9 +43,12 @@ TRUST: dict[SignalSource, float] = {
 # Half-life-ish constant per source, in seconds. A BLE badge pings often, so silence
 # means something quickly; a face check-in is a deliberate act and stays meaningful.
 TAU_SECONDS: dict[SignalSource, float] = {
+    # RFID is a boundary crossing, not a dwell: a gate tap tells you a lot for a
+    # minute and nothing at all after five. Longer than BLE, and an old gate tap
+    # would outlive the newer OPD pings and drag the doctor back to the door.
+    SignalSource.RFID: 180,
     SignalSource.BLE: 300,
     SignalSource.WIFI: 600,
-    SignalSource.RFID: 900,
     SignalSource.FACE: 1800,
     SignalSource.MANUAL: 7200,
     SignalSource.ROSTER: 3600,
@@ -63,6 +66,11 @@ LOOKBACK = timedelta(hours=4)
 # exactly one place, so locations are competing evidence, not additive evidence.
 CORROBORATION = 0.05
 MAX_CORROBORATION = 3
+# How long after the newest sighting an older one still describes "now". Beyond this
+# a sighting is history: once the badge has been seen somewhere newer, an older and
+# longer-lived signal must not resurrect the previous location — the honest answer is
+# to fall back to the roster.
+STALE_AFTER_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -172,10 +180,15 @@ def fuse(
     # believed sighting is the *current* one. A gate tap and an OPD ping a minute
     # later are not competing claims about now — the later one supersedes the earlier.
     # Ranking on trust alone would pin a doctor to the door they walked through.
+    sensed = [o for o in all_obs if o.source != SignalSource.ROSTER]
+    newest_at = max((o.observed_at for o in sensed), default=None)
+    grace = STALE_AFTER_SECONDS / max(sim_speed, 1)
     believable = [
         (o, sc)
-        for o, sc in ((o, decayed_score(o, now, sim_speed)) for o in all_obs)
+        for o, sc in ((o, decayed_score(o, now, sim_speed)) for o in sensed)
         if sc >= FLIP_THRESHOLD
+        and newest_at is not None
+        and (newest_at - o.observed_at).total_seconds() <= grace
     ]
     if believable:
         # a sighting that names a place beats one that only proves "somewhere on site"
