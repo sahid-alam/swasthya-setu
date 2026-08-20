@@ -1,4 +1,4 @@
-.PHONY: install bootstrap-local dev dev-local migrate seed demo test lint
+.PHONY: install bootstrap-local dev dev-local migrate seed demo test lint train
 
 # From a clean checkout, with postgres + redis running:
 #   make install bootstrap-local migrate seed test
@@ -26,6 +26,11 @@ migrate:
 
 seed:
 	cd backend && .venv/bin/python -m app.seed
+
+train:             ## retrain ML artifacts (downloads the 110k dataset on first run)
+	cd backend && .venv/bin/python ../ml/train_noshow.py
+	cd backend && .venv/bin/python ../ml/train_wait.py
+	cd backend && .venv/bin/python ../ml/compare_fcfs.py
 
 demo: migrate seed  ## seeded demo day + scripted scenario
 	@echo "scripted scenario lands in Phase 3 — see infra/demo-script.md"

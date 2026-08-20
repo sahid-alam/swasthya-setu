@@ -9,3 +9,4 @@ dev-dist/
 *.tsbuildinfo
 .env
 .DS_Store
+ml/data/

@@ -1,0 +1,42 @@
+{
+  "model": "xgboost-classifier",
+  "target": "patient does not attend",
+  "features": [
+    "lead_days",
+    "age",
+    "is_female",
+    "sms_received",
+    "hypertension",
+    "diabetes",
+    "alcoholism",
+    "handicap",
+    "appointment_dow",
+    "scheduled_hour"
+  ],
+  "metrics": {
+    "roc_auc": 0.7355,
+    "brier": 0.1433,
+    "baseline_brier": 0.1612,
+    "base_rate": 0.2019,
+    "n_train": 88421,
+    "n_test": 22106
+  },
+  "source": {
+    "name": "Medical Appointment No Shows (Vitoria, Brazil)",
+    "url": "https://raw.githubusercontent.com/mroker242/no-show-appointments/master/noshowappointments-kagglev2-may-2016.csv",
+    "rows": 110527,
+    "sha256": "9132d3e7d0246617df9041d3764f20ad6f08e7b0d9f0997fa254fc5e52eda27d"
+  },
+  "importance": {
+    "lead_days": 0.3585,
+    "sms_received": 0.2367,
+    "age": 0.0753,
+    "alcoholism": 0.0607,
+    "is_female": 0.0536,
+    "scheduled_hour": 0.0477,
+    "hypertension": 0.0446,
+    "handicap": 0.0445,
+    "appointment_dow": 0.0421,
+    "diabetes": 0.0364
+  }
+}

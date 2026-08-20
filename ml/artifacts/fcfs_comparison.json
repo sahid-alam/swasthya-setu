@@ -1,0 +1,65 @@
+{
+  "runs_per_scenario": 40,
+  "scenarios": [
+    {
+      "name": "spare capacity in the department",
+      "seats_for_40_patients": 55,
+      "cpsat": {
+        "mean_displacement_min": 23.1,
+        "p90_displacement_min": 69.8,
+        "weighted_cost": 3432.0,
+        "unplaced": 0,
+        "experienced_wait_min": 14.7
+      },
+      "fcfs": {
+        "mean_displacement_min": 22.7,
+        "p90_displacement_min": 43.9,
+        "weighted_cost": 15941.8,
+        "unplaced": 0,
+        "experienced_wait_min": 15.1
+      },
+      "priority_mean_displacement": {
+        "cpsat": {
+          "GENERAL": 61.3,
+          "PRIORITY": 8.3,
+          "REFERRED": 0
+        },
+        "fcfs": {
+          "GENERAL": 46,
+          "PRIORITY": 48.9,
+          "REFERRED": 25
+        }
+      }
+    },
+    {
+      "name": "department already busy",
+      "seats_for_40_patients": 30,
+      "cpsat": {
+        "mean_displacement_min": 71.8,
+        "p90_displacement_min": 252.4,
+        "weighted_cost": 7176.8,
+        "unplaced": 10,
+        "experienced_wait_min": 3.9
+      },
+      "fcfs": {
+        "mean_displacement_min": 147.8,
+        "p90_displacement_min": 273.5,
+        "weighted_cost": 76108.9,
+        "unplaced": 10,
+        "experienced_wait_min": 3.9
+      },
+      "priority_mean_displacement": {
+        "cpsat": {
+          "GENERAL": 112,
+          "PRIORITY": 11.7,
+          "REFERRED": 0
+        },
+        "fcfs": {
+          "GENERAL": 171.6,
+          "PRIORITY": 147.5
+        }
+      }
+    }
+  ],
+  "honest_reading": "Spare capacity: CP-SAT does NOT reduce mean displacement. It is a wash (23.1 vs 22.7 min) and on the raw mean it is marginally worse. What changes is WHO waits \u2014 weighted cost drops ~4.6x because referred patients wait 0 min instead of 25 and priority patients 8 instead of 49, paid for by general patients waiting longer. Busy department, where it actually matters: mean displacement 71.8 vs 147.8 min, a 51% reduction, and weighted cost 10.6x lower. Both policies must turn away 10 of 40 patients; FCFS picks them by list order and ends up dropping referred patients entirely, CP-SAT drops the lowest clinical priority and places every referred patient first. The claim to make is 'the right people wait less', not 'everyone waits less' \u2014 the second one is not true and a judge will find that out."
+}

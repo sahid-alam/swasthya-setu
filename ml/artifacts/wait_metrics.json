@@ -1,0 +1,33 @@
+{
+  "model": "xgboost-regressor",
+  "target": "minutes until the patient is seen",
+  "features": [
+    "ahead_in_queue",
+    "avg_consult_minutes",
+    "current_delay_minutes",
+    "noshow_rate",
+    "minutes_elapsed"
+  ],
+  "metrics": {
+    "mae_minutes": 14.99,
+    "naive_mae_minutes": 27.28,
+    "median_abs_error_minutes": 10.97,
+    "n_train": 120000,
+    "n_test": 30000
+  },
+  "source": {
+    "name": "SYNTHETIC \u2014 simulated clinic days",
+    "synthetic": true,
+    "why": "no public dataset gives per-position OPD waiting times; the simulation uses the 20.2% no-show rate measured on the real 110k dataset and gamma-distributed consult lengths",
+    "days_simulated": 4000,
+    "rows": 150000,
+    "seed": 2026
+  },
+  "importance": {
+    "ahead_in_queue": 0.7399,
+    "avg_consult_minutes": 0.194,
+    "minutes_elapsed": 0.0445,
+    "noshow_rate": 0.012,
+    "current_delay_minutes": 0.0096
+  }
+}

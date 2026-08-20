@@ -20,12 +20,14 @@ from app.models import (
     Appointment,
     AppointmentStatus,
     Doctor,
+    Patient,
     PlanRun,
     PlanTrigger,
     PriorityClass,
     Slot,
     SlotStatus,
 )
+from app.services import models as ml
 from app.services.availability import bookable_slots, unavailability_for
 
 # Priority is expressed as a cost multiplier rather than a hard ordering constraint:
@@ -45,6 +47,12 @@ UNPLACED_COST = 24 * 60
 
 SOLVE_TIME_LIMIT_SECONDS = 5.0
 REPLAN_HORIZON_HOURS = 24
+
+# Overbooking, with a safety cap. A seat whose occupant is this likely to miss can
+# hold one extra patient — but only a handful per doctor per day, because the cost of
+# being wrong is a real person waiting in a corridor, not a number in an objective.
+OVERBOOK_NOSHOW_THRESHOLD = 0.5
+OVERBOOK_MAX_PER_DOCTOR = 3
 
 
 @dataclass(frozen=True)
@@ -175,6 +183,7 @@ async def replan_doctor(
     slots = await bookable_slots(
         db, doctor.department_id, now, end_of_day, exclude_doctor=doctor.id, now=now
     )
+    slots += await _overbookable_slots(db, doctor, now, end_of_day)
 
     status, objective, assignment = ("NO_APPOINTMENTS", None, {})
     if bookings:
@@ -206,7 +215,7 @@ async def replan_doctor(
         (result.moves if target else result.unplaced).append(move)
 
     if apply:
-        await _apply(db, bookings, slots, assignment)
+        await _apply(db, bookings, slots, assignment, now)
 
     db.add(
         PlanRun(
@@ -245,15 +254,54 @@ async def replan_doctor(
     return result
 
 
+async def _overbookable_slots(
+    db: AsyncSession, doctor: Doctor, frm: datetime, until: datetime
+) -> list[Slot]:
+    """Seats already taken by someone the model expects not to turn up.
+
+    Capped hard: overbooking is a bet, and a bet that pays out badly means a patient
+    waits in a corridor. Never touches the absent doctor's own slots.
+    """
+    rows = (
+        await db.execute(
+            select(Slot, Appointment)
+            .join(Appointment, Appointment.slot_id == Slot.id)
+            .where(
+                Slot.department_id == doctor.department_id,
+                Slot.doctor_id != doctor.id,
+                Slot.starts_at >= frm,
+                Slot.starts_at <= until,
+                Slot.status == SlotStatus.FULL,
+                Appointment.status == AppointmentStatus.BOOKED,
+                Appointment.noshow_prob >= OVERBOOK_NOSHOW_THRESHOLD,
+            )
+            .order_by(Appointment.noshow_prob.desc())
+        )
+    ).all()
+
+    per_doctor: dict = {}
+    out: list[Slot] = []
+    for slot, _appt in rows:
+        used = per_doctor.get(slot.doctor_id, 0)
+        if used >= OVERBOOK_MAX_PER_DOCTOR:
+            continue
+        per_doctor[slot.doctor_id] = used + 1
+        slot.capacity = max(slot.capacity, 2)  # room for exactly one more
+        out.append(slot)
+    return out
+
+
 async def _apply(
     db: AsyncSession,
     bookings: list[Booking],
     slots: list[Slot],
     assignment: dict[int, int],
+    now: datetime,
 ) -> None:
     """Rebook rather than rewrite: the original row is kept and marked RESCHEDULED so
     `rescheduled_from` gives the patient (and a judge) the full chain. Slots are only
     ever re-pointed, never deleted — `appointments.slot_id` is RESTRICT."""
+    noshow = await _noshow_for(db, bookings, slots, assignment, now)
     for ai, booking in enumerate(bookings):
         appt = booking.appointment
         si = assignment.get(ai)
@@ -274,12 +322,50 @@ async def _apply(
                 priority_class=appt.priority_class,
                 status=AppointmentStatus.BOOKED,
                 token_number=appt.token_number,
-                noshow_prob=appt.noshow_prob,
+                # a moved appointment is a fresh bet: the lead time changed, so the
+                # probability of them turning up changed with it
+                noshow_prob=noshow.get(appt.patient_id, appt.noshow_prob),
                 rescheduled_from=appt.id,
             )
         )
         appt.status = AppointmentStatus.RESCHEDULED
     await db.flush()
+
+
+async def _noshow_for(
+    db: AsyncSession,
+    bookings: list[Booking],
+    slots: list[Slot],
+    assignment: dict[int, int],
+    now: datetime,
+) -> dict:
+    """Re-score no-show probability for everyone who is about to be moved."""
+    patient_ids = {b.appointment.patient_id for b in bookings}
+    if not patient_ids or not ml.available():
+        return {}
+    people = {
+        p.id: p
+        for p in (await db.execute(select(Patient).where(Patient.id.in_(patient_ids))))
+        .scalars()
+        .all()
+    }
+    out = {}
+    for ai, booking in enumerate(bookings):
+        si = assignment.get(ai)
+        if si is None:
+            continue
+        patient = people.get(booking.appointment.patient_id)
+        if patient is None:
+            continue
+        flags = patient.priority_flags or {}
+        out[patient.id] = ml.predict_noshow(
+            booked_at=now,
+            appointment_at=slots[si].starts_at,
+            age=patient.age,
+            is_female=(patient.gender or "F").upper().startswith("F"),
+            handicap=bool(flags.get("disabled")),
+        )
+    return out
 
 
 async def replan_if_unavailable(

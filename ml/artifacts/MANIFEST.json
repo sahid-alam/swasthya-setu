@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "trained_on": "2026-08-20",
+  "note": "Artifacts are committed and loaded at startup; nothing trains at runtime (ARCHITECTURE D5).",
+  "models": {
+    "noshow": {
+      "file": "noshow.json",
+      "sha256_16": "0724a7d937de9eb2",
+      "metrics_file": "noshow_metrics.json",
+      "data": "real \u2014 public 110,527-row Medical Appointment No Shows dataset",
+      "synthetic": false,
+      "retrain": "python ml/train_noshow.py"
+    },
+    "wait": {
+      "file": "wait.json",
+      "sha256_16": "32b9e1c26149ee2f",
+      "metrics_file": "wait_metrics.json",
+      "data": "SYNTHETIC \u2014 simulated clinic days; no public per-position OPD wait data exists",
+      "synthetic": true,
+      "retrain": "python ml/train_wait.py"
+    }
+  }
+}

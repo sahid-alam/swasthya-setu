@@ -34,7 +34,8 @@ services:
     image: python:3.11-slim
     working_dir: /app
     command: >
-      sh -c "pip install -q uv && uv sync --frozen &&
+      sh -c "apt-get update -qq && apt-get install -y -qq --no-install-recommends libgomp1 &&
+             pip install -q uv && uv sync --frozen &&
              .venv/bin/alembic upgrade head &&
              .venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
     environment:
@@ -46,7 +47,9 @@ services:
     # anonymous volume on .venv: the bind mount would otherwise let the container's
     # `uv sync` overwrite the host venv with /app-relative shebangs, breaking
     # `make test` outside docker. Same reason node_modules is masked below.
-    volumes: ["../backend:/app", "/app/.venv"]
+    # ml/ is mounted read-only: the committed artifacts are loaded at startup and
+    # nothing trains at runtime (ARCHITECTURE D5)
+    volumes: ["../backend:/app", "/app/.venv", "../ml:/ml:ro"]
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
