@@ -470,6 +470,13 @@ async def main() -> None:
         # be inventing 200 facts.
         # A value that is not an address is almost always a comment the .env parser
         # kept — ignore it loudly rather than mailing OTPs into the void.
+        # Same idea as the email below: the first seeded patient becomes you, so a real
+        # phone can link a real Telegram chat. Stored as the last ten digits, which is
+        # what every lookup in the codebase matches on.
+        demo_phone = "".join(c for c in get_settings().demo_patient_phone if c.isdigit())[-10:]
+        if len(demo_phone) == 10:
+            patients[0].phone = demo_phone
+
         demo_email = get_settings().demo_patient_email.strip()
         if demo_email and "@" not in demo_email:
             print(f"ignoring DEMO_PATIENT_EMAIL, that is not an address: {demo_email[:40]!r}")

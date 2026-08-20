@@ -134,6 +134,14 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
   built. Retries three times, because the usual failure is a sleeping phone and it
   often answers the second time. **Payload shape is from the app's docs, not yet
   verified against a real handset** — one live send will confirm it. Mock stays default.
+- [x] **Telegram verified live end-to-end** 2026-08-21 — real OTP and a real booking
+  confirmation delivered to a linked chat (`mock=false`, `channel=TELEGRAM`), and the
+  code from Telegram completed a patient login. Three defects found by doing it rather
+  than reading it: a space inside the bot token (Telegram answers that with a bare 404),
+  `.env.example` inline comments being swallowed into five values, and
+  `SMS_TEST_RECIPIENT` documented but never declared as a setting. `DEMO_PATIENT_PHONE`
+  now puts the operator's number on the first seeded patient, since a re-seed wipes both
+  the phone and the chat link.
 - [ ] Bhashini voice booking (constrained intent flow, mock mode + sandbox)
 - [ ] Outbound TTS reschedule calls (mock mode)
 - [ ] Kiosk mode skin for PWA

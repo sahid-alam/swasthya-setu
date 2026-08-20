@@ -112,6 +112,10 @@ class Settings(BaseSettings):
     # Vapi sends this on every tool call; without it the endpoint refuses to be wired.
     vapi_tool_secret: str = ""
 
+    # The demo needs one patient reachable on a handset you are holding: Telegram links
+    # by the number the patient shares, so without this nobody in the seed is you.
+    demo_patient_phone: str = ""
+
     # The demo needs one patient whose address you can actually receive mail at.
     # Applied by `make seed` to the first seeded patient; empty leaves every patient
     # without an email, which is the honest default.
