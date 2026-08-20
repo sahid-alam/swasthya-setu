@@ -100,7 +100,7 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
 
 - [ ] `make demo`: full seeded day + scripted scenario, offline, clean machine
 - [ ] `infra/demo-script.md`: presenter click-path, timings, fallback plan
-- [ ] Judge Q&A doc assembled from `/defend` outputs
+- [ ] Judge Q&A doc assembled from `/defend` outputs — `docs/judge-qa.md` started (IVR)
 - [ ] Load sanity: 1 hospital-day replan under 5s with 3 hospitals seeded
 - [ ] Failure drills: kill redis / kill a simulator mid-demo → graceful degradation visible
 - [ ] UI polish pass on Tier 1 screens against `docs/DESIGN.md`: command-center flair (dark dock sidebar, veil transition, grain, kinetic headlines) per §9a; verify PWA/kiosk have NO heavy effects per §9b/§9c; audit every screen for raw hexes vs tokens and 3m projector legibility of live-state text
