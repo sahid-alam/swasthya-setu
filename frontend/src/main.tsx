@@ -5,6 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { getToken } from "./lib/api";
 import Dashboard from "./routes/Dashboard";
+import Book from "./routes/Book";
 import PresenceBoard from "./routes/PresenceBoard";
 import DevUI from "./routes/DevUI";
 import Login from "./routes/Login";
@@ -33,6 +34,14 @@ createRoot(document.getElementById("root")!).render(
             element={
               <RequireAuth>
                 <Dashboard />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/book"
+            element={
+              <RequireAuth>
+                <Book />
               </RequireAuth>
             }
           />

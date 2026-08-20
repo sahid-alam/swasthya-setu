@@ -38,6 +38,9 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // jsdom disables localStorage on an opaque origin, and the offline outbox lives
+    // in localStorage — without a real URL those tests see `undefined`.
+    environmentOptions: { jsdom: { url: "http://localhost:5173" } },
     setupFiles: ["./src/test-setup.ts"],
     css: false,
   },

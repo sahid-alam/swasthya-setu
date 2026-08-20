@@ -217,3 +217,47 @@ async def outbox(
         )
         for n in rows
     ]
+
+
+class PwaDept(BaseModel):
+    id: str
+    name: str
+    hospital: str
+
+
+class PwaPatient(BaseModel):
+    id: str
+    name: str
+    language: str
+
+
+class PwaContext(BaseModel):
+    departments: list[PwaDept]
+    patient: PwaPatient
+
+
+@router.get("/pwa/context", response_model=PwaContext)
+async def pwa_context(db: AsyncSession = Depends(get_db), _=Depends(STAFF)) -> PwaContext:
+    """Everything the patient app needs to render its first screen, in one call.
+
+    One round trip matters on a 2G connection in a valley; it is also why the PWA
+    does not stitch three queries together client-side.
+
+    The "patient" is currently a seeded stand-in — patient self-service auth (phone
+    OTP) is NOT built, so this app is staff- or kiosk-operated. Do not present it as
+    a patient logging in.
+    """
+    from app.models import Department as Dept
+
+    rows = (
+        await db.execute(
+            select(Dept, Hospital).join(Hospital, Hospital.id == Dept.hospital_id).limit(40)
+        )
+    ).all()
+    patient = (await db.execute(select(Patient).limit(1))).scalar_one()
+    return PwaContext(
+        departments=[PwaDept(id=str(d.id), name=d.name, hospital=h.name) for d, h in rows],
+        patient=PwaPatient(
+            id=str(patient.id), name=patient.name, language=patient.preferred_language.value
+        ),
+    )

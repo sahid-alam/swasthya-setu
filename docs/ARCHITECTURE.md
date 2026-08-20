@@ -76,7 +76,7 @@ Bookings made offline go to a local PouchDB `outbox`; on reconnect they sync to 
 | D3 | Warm-started partial replans | Full-day global solve too slow for live demo | Solve times regress |
 | D4 | Mock adapters persist real rows | Demo must show messages w/o vendor accounts | — |
 | D5 | Models trained offline, artifacts committed | Training must never block or flake | Artifact >100MB → use release assets |
-| D6 | CouchDB only for PWA outbox/read-cache | Full offline DB sync is a rabbit hole | — |
+| D6 | ~~CouchDB only for PWA outbox/read-cache~~ **superseded by D23** | Full offline DB sync is a rabbit hole | — |
 | D7 | Compose is canonical; `make dev-local` runs the same stack off host postgres/redis | Not every dev machine has Docker; blocking on it stalls the build | — |
 | D8 | Fonts self-hosted as woff2, never fetched at runtime | DESIGN.md §9b + Iron Rule 4: the PWA and the demo must render with no internet | — |
 | D9 | `tokens.css` is both the token block and the Tailwind theme (v4 `@theme`) | One file to keep in sync with DESIGN.md §1 instead of two | Tailwind drops `@theme` |
@@ -91,6 +91,7 @@ Bookings made offline go to a local PouchDB `outbox`; on reconnect they sync to 
 | D18 | Wait-time model trains on simulated clinic days, labelled SYNTHETIC everywhere it surfaces | No public dataset gives per-position OPD waits; Iron Rule 5 says say so rather than imply otherwise | Real HMIS queue data arrives |
 | D19 | Overbooking is capped at 3 per doctor per day, only on seats whose occupant is ≥50% likely to miss | Overbooking is a bet, and losing it means a real person waits in a corridor | Measured no-show calibration improves |
 | D21 | Message bodies live in `adapters/base.render`, not in each adapter | Otherwise WhatsApp and SMS drift and the same patient gets different words depending on how they were reached | — |
+| D23 | PWA outbox is localStorage + REST replay, not PouchDB/CouchDB (supersedes D6) | Without CouchDB replication, PouchDB is ~150 KB and a vulnerable `uuid` transitive dep doing what 40 lines do. Same rationale as D6 — avoid the sync rabbit hole — taken one step further. Interface unchanged, so PouchDB drops back in by replacing one file | A read-cache needs real replication |
 | D22 | Notifications are sent inside the replan transaction, not as a follow-up job | A plan that moved forty patients and told none of them is worse than no plan | Send latency starts dominating the replan |
 | D20 | An unseatable patient becomes RESCHEDULE_PENDING, never a silent CANCELLED | A cancelled row means the patient finds out by turning up to an empty clinic; pending keeps them owed an appointment and on a staff screen | — |
 
