@@ -280,14 +280,18 @@ wa 1         # -> "Confirmed. Token 32."         state: booked
 
 This is the payoff of step 8 — go back to it after the replan.
 
+The outbox is newest-first, and by now the login code and the two bookings you just
+made sit on top of it — so filter to the reschedule notices rather than raising the
+limit and scrolling. (The filter also prints real Devanagari instead of `\uXXXX`.)
+
 ```bash
-curl -s "localhost:8000/api/v1/notifications?limit=5" -H "Authorization: Bearer $TOK" \
-  | python3 -m json.tool
+curl -s "localhost:8000/api/v1/notifications?limit=60" -H "Authorization: Bearer $TOK" \
+  | python3 -c "import sys,json;rows=[n for n in json.load(sys.stdin) if n['template']=='rescheduled'];print(json.dumps(rows[:3],ensure_ascii=False,indent=2))"
 ```
 
 Real messages, in Hindi, naming the replacement doctor and the new token:
-*"आपका अपॉइंटमेंट Indira Gandhi Medical College में 20 Aug, 18:58 पर बदल दिया गया है।
-अब आपको Dr. Mohan Rana देखेंगे। टोकन 4।"*
+*"स्वास्थ्य-सेतु: आपका अपॉइंटमेंट Indira Gandhi Medical College में 20 Aug, 18:51 पर बदल
+दिया गया है। अब आपको Dr. Deepak Bhardwaj देखेंगे। टोकन 2।"*
 
 > "WhatsApp first, SMS only if WhatsApp fails — a patient reached on WhatsApp does not
 > also get an SMS that costs money. The SMS rows you see are the failures falling back,
@@ -297,7 +301,10 @@ Real messages, in Hindi, naming the replacement doctor and the new token:
 And what that patient's own app is served now:
 
 ```bash
-curl -s localhost:8000/api/v1/pwa/my-queue/<patient_id> -H "Authorization: Bearer $TOK"
+PID=$(psql -U setu -h localhost -d swasthya -tAc \
+  "select patient_id from notifications where template='rescheduled' order by created_at desc limit 1")
+curl -s "localhost:8000/api/v1/pwa/my-queue/$PID" -H "Authorization: Bearer $TOK" \
+  | python3 -m json.tool
 ```
 
 New doctor, new time, `position` and `predicted_wait_minutes`.
