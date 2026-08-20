@@ -107,3 +107,78 @@ def test_missing_credentials_fail_loudly_rather_than_sending_nowhere(monkeypatch
     monkeypatch.setattr(get_settings(), "whatsapp_token", "", raising=False)
     with pytest.raises(AdapterError):
         whatsapp_real.CloudApiWhatsApp()
+
+
+# ------------------------------------ Cloud API behaviour against a stubbed Graph API
+#
+# The credentials are not here yet, but the retry policy and the 24-hour rejection are
+# ours, not Meta's — so they are testable without a real number.
+
+
+def _stub(monkeypatch, responses):
+    """Serve `responses` in order to the adapter's httpx client, counting calls."""
+    import httpx
+
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return responses[min(calls["n"] - 1, len(responses) - 1)]
+
+    real_client = httpx.AsyncClient
+
+    def client(*args, **kwargs):
+        return real_client(*args, **{**kwargs, "transport": httpx.MockTransport(handler)})
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    return calls
+
+
+def test_a_5xx_is_retried_and_can_still_succeed(client, monkeypatch):
+    import httpx
+
+    calls = _stub(
+        monkeypatch,
+        [
+            httpx.Response(500, text="upstream sad"),
+            httpx.Response(200, json={"messages": [{"id": "wamid.TEST"}]}),
+        ],
+    )
+    adapter = _cloud_api(monkeypatch)
+    monkeypatch.setattr("asyncio.sleep", _no_wait)
+
+    result = client.portal.call(
+        lambda: adapter.send(to="9418000001", template="otp", params={"code": "1", "minutes": 5})
+    )
+    assert result.status is NotificationStatus.SENT
+    assert result.provider_ref == "wamid.TEST"
+    assert calls["n"] == 2
+
+
+def test_being_outside_the_24_hour_window_is_not_retried_and_says_what_to_do(client, monkeypatch):
+    """131047 means 'send a template instead'. Retrying it just spends the rate limit,
+    and an error that does not name the fix is an error someone re-debugs at 3am."""
+    import httpx
+
+    calls = _stub(
+        monkeypatch,
+        [
+            httpx.Response(
+                400,
+                json={"error": {"code": 131047, "message": "Re-engagement message"}},
+                headers={"content-type": "application/json"},
+            )
+        ],
+    )
+    adapter = _cloud_api(monkeypatch)
+
+    result = client.portal.call(
+        lambda: adapter.send(to="9418000001", template="otp", params={"code": "1", "minutes": 5})
+    )
+    assert result.status is NotificationStatus.FAILED
+    assert calls["n"] == 1
+    assert "WHATSAPP_TEMPLATES" in result.error and "otp" in result.error
+
+
+async def _no_wait(_seconds):
+    return None
