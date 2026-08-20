@@ -150,17 +150,27 @@ export const PRESENCE_TONE: Record<string, ChipTone> = {
 export function PresenceChip({
   state,
   confidence,
+  degraded = false,
 }: {
   state: string;
   confidence?: number;
+  /** No live signal was strong enough — this is what the roster claims, not what
+   *  we can see. It must never wear the same confident colour as an observation
+   *  (PRD §M1: "never silently stays PRESENT"). */
+  degraded?: boolean;
 }) {
   const label = state.replace(/_/g, " ").toLowerCase();
   return (
     <span className="inline-flex items-center gap-2">
-      <Chip tone={PRESENCE_TONE[state] ?? "neutral"}>
+      <Chip tone={degraded ? "neutral" : (PRESENCE_TONE[state] ?? "neutral")}>
         {/* §9a beats §6's 11px chip default: judges read this from ~3m */}
         <span className="live-state capitalize">{label}</span>
       </Chip>
+      {degraded && (
+        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-2">
+          roster only
+        </span>
+      )}
       {/* low confidence is shown, never hidden behind an optimistic colour (§9d) */}
       {confidence !== undefined && confidence < 0.6 && (
         <span className="tnum text-[11px] text-muted-2">

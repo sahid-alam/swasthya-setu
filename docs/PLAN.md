@@ -5,7 +5,7 @@ Work strictly top-to-bottom within a phase. Do not start a phase until the previ
 ## Phase 0 — Foundation (target: ~1 week part-time)
 
 - [x] Monorepo scaffold per CLAUDE.md layout; Makefile with all targets (stub ok)
-- [ ] `infra/docker-compose.yml`: postgres, redis, couchdb, backend (hot reload), frontend (Vite dev) — *written, never run: no Docker on this machine*
+- [x] `infra/docker-compose.yml`: postgres, redis, couchdb, backend (hot reload), frontend (Vite dev) — all five containers verified up on 2026-08-20; migrations, seed and the M1 scenarios all ran against the compose stack
 - [x] FastAPI skeleton: settings via pydantic-settings, `/api/v1/health`, error handling, CORS
 - [x] Alembic initialized; migration 0001 = full schema from `docs/SCHEMA.md`
 - [x] Auth: JWT, roles (admin, doctor, staff, patient); seed admin user
@@ -17,19 +17,21 @@ Work strictly top-to-bottom within a phase. Do not start a phase until the previ
   database and role, then running `make bootstrap-local migrate seed test lint` from nothing
 
 **Exit:** `make dev` brings up the full stack; login works; a published Redis event appears in the browser.
-**Exit status:** 2 of 3 verified — login works and a `redis-cli publish` reached the browser with no refresh. `make dev` is unverified because Docker is not installed here; `make dev-local` covers the same stack from host postgres/redis and is what was actually exercised.
+**Exit status:** all 3 verified. `make dev` brought the full stack up on 2026-08-20 once Docker was installed; login works; a `redis-cli publish` reaches the browser with no refresh. `make dev-local` remains the no-Docker path.
 
 ## Phase 1 — Tier 1 vertical slice (target: ~4 weeks part-time)
 
 Order matters: presence → optimizer → one channel → dashboard, then widen.
 
 ### 1A. Presence engine
-- [ ] Signal ingestion API `POST /api/v1/signals` (schema in ARCHITECTURE.md)
-- [ ] Simulators: BLE, RFID, Wi-Fi geofence, roster feed (see `.claude/skills/signal-simulator/`)
-- [ ] Fusion state machine + confidence scoring; transitions persisted with evidence
-- [ ] Face kiosk check-in endpoint (InsightFace, enrolled doctors only; simulator provides embeddings)
-- [ ] Manual admin override with audit log
-- [ ] Unit tests: decay, conflicting signals, roster fallback
+- [x] Signal ingestion API `POST /api/v1/signals` (schema in ARCHITECTURE.md)
+- [x] Simulators: BLE, RFID, Wi-Fi geofence, roster feed (see `.claude/skills/signal-simulator/`)
+- [x] Fusion state machine + confidence scoring; transitions persisted with evidence
+- [x] Face kiosk check-in endpoint — embedding matching + enrolment gate done; the
+  InsightFace *extraction* step is not wired (a dev capture endpoint stands in for the
+  camera). No production claim until a real kiosk feeds it.
+- [x] Manual admin override with audit log
+- [x] Unit tests: decay, conflicting signals, roster fallback
 
 ### 1B. Appointment & queue engine
 - [ ] Slot model + availability derivation from presence + roster
@@ -47,7 +49,8 @@ Order matters: presence → optimizer → one channel → dashboard, then widen.
 - [ ] Notification service consuming reschedule events → channel fan-out with delivery log
 
 ### 1D. Command center
-- [ ] Presence board (live, per hospital/department)
+- [x] Presence board (live, per hospital/department) — brought forward from 1D for the
+  20 Aug presentation; includes the evidence drawer ("how do you know?")
 - [ ] Queue view with predicted waits
 - [ ] Alerts: roster-vs-presence mismatch, queue overflow
 - [ ] Network map (Leaflet) with facility status
@@ -152,3 +155,52 @@ in chat (see below).
 (hosted Postgres means no offline demo) and with the fixed stack, but Supabase-as-managed-
 Postgres for a shared team dev DB would work unchanged — SQLAlchemy/Alembic only need the
 connection string. Needs a team decision, no code was written either way.
+
+### 2026-08-20
+
+**Done:** Phase 1A complete (presence engine), plus the 1D presence board pulled forward
+for a presentation. 43 backend + 5 frontend tests green, lint clean.
+
+**Demo:** `infra/demo-script.md` is the presenter runbook — start commands, a seven-step
+click path mapped to the PRD §M1 accept criteria, timings, and a failure table. Every step
+in it was executed, not just written.
+
+**Run it with** `PRESENCE_SWEEP_SECONDS=5 SIM_SPEED=12` — decay is then visible in ~25s
+instead of ~5 minutes. The fusion maths is unchanged; only the tau constants scale.
+
+**Docker now works** (user installed it). All five containers came up, migrations + seed
+ran inside the container, and the M1 scenarios passed against the compose stack. One real
+bug it exposed: the `../backend:/app` bind mount let the container's `uv sync` overwrite
+the host `.venv` with `/app`-relative shebangs. Fixed with an anonymous volume on
+`/app/.venv`, the same guard `node_modules` already had. If a host venv ever breaks this
+way again: `uv venv --clear .venv && uv sync`.
+
+**Three fusion bugs found by running the thing, not reading it** — all now pinned by tests:
+- Summing observations per state meant 90 minutes of OPD pings could never be outvoted by
+  one RFID tap at the theatre door, so *movement was undetectable*. Locations are mutually
+  exclusive evidence: score is now max-per-place plus a capped corroboration bonus.
+- Trust outranked recency, so a gate tap pinned a doctor to the door they had just walked
+  through. Trust now decides whether a sighting is *believed*; recency decides which
+  believed sighting is *current*.
+- `JSONB` stores Python `None` as JSON `null`, not SQL NULL, so unenrolled doctors looked
+  enrolled to `IS NOT NULL`. Needs `JSONB(none_as_null=True)`. Worth remembering for every
+  future nullable JSONB column.
+
+**Design decision worth keeping:** a roster-derived state renders grey and labelled
+`ROSTER ONLY`, never confident green. Opening the board on a wall of grey is the strongest
+part of the demo — it makes "we optimise against the roster, not reality" visible in one
+glance, and it satisfies PRD §M1 "never silently stays PRESENT".
+
+**Schema:** migration 0002 adds `zones.code` (what a reader is provisioned with; `name` is
+a display string) and `doctors.face_embedding`. SCHEMA.md updated.
+
+**Known gaps, stated honestly:**
+- Face check-in does embedding *matching*, not embedding *extraction* — InsightFace is not
+  wired; a dev-only, admin-gated capture endpoint stands in for the camera.
+- Every signal triggers a full re-fusion and commit (~35 signals/sec measured). Fine for 3
+  hospitals; revisit before any load claim.
+- The scenario-trigger panel (1D) is not built — scenarios run from the CLI, which arguably
+  demos better since it shows the simulator as a genuine external client.
+
+**Next session picks up:** Phase 1B, first item — slot model + availability derivation from
+presence + roster. Still open: the Supabase question (see 2026-08-19 entry).

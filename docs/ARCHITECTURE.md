@@ -80,6 +80,9 @@ Bookings made offline go to a local PouchDB `outbox`; on reconnect they sync to 
 | D9 | `tokens.css` is both the token block and the Tailwind theme (v4 `@theme`) | One file to keep in sync with DESIGN.md §1 instead of two | Tailwind drops `@theme` |
 | D10 | Settings only declares env vars that code reads | An unread `*_MOCK_MODE` flag reads as wired-up and silently isn't | — |
 | D11 | FK delete rule follows nullability; `appointments.slot_id` is RESTRICT | Uniform CASCADE would let a deleted appointment erase its own outbox row — the evidence a judge asks to see | — |
+| D12 | Fusion scores max-per-location, not sum | A person is in one place, so sightings compete. Summing made an hour of OPD pings unbeatable by one theatre-door tap — movement became undetectable | — |
+| D13 | Trust gates belief; recency picks the current sighting | Ranking on trust alone pinned a doctor to the gate they had just walked through | — |
+| D14 | A roster-derived state renders grey and labelled, never confident green | PRD §M1 "never silently stays PRESENT"; also the clearest way to show roster-vs-reality | — |
 
 ## Ports (dev)
 

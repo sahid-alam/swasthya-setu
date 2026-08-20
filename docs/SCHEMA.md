@@ -9,14 +9,14 @@ PostgreSQL 16. All tables: `id UUID PK default gen_random_uuid()`, `created_at`,
 **hospitals** — name, code, district, lat, lng, level(enum: PHC|CHC|DISTRICT|REGIONAL|MEDICAL_COLLEGE), contact
 **departments** — hospital_id FK, name, specialty_code, room_count
 **users** — name, phone (unique), email?, password_hash?, role(enum: ADMIN|DOCTOR|STAFF|PATIENT), hospital_id FK?
-**doctors** — user_id FK, hospital_id FK, department_id FK, specialty, badge_id (unique; what BLE/RFID track), face_enrolled bool, avg_consult_minutes
+**doctors** — user_id FK, hospital_id FK, department_id FK, specialty, badge_id (unique; what BLE/RFID track), face_enrolled bool, face_embedding jsonb? (voluntary enrolment; the vector only, never an image), avg_consult_minutes
 **patients** — user_id FK?, name, phone, age, gender, village/district, priority_flags jsonb (elderly, disabled, pregnant…), preferred_language(enum: HI|EN)
 
 ## Presence (M1)
 
 **shifts** — doctor_id FK, department_id FK, starts_at, ends_at, kind(enum: OPD|WARD|SURGERY|ON_CALL|LEAVE)
 **presence_signals** — doctor_id FK (via badge lookup), source(enum: BLE|RFID|FACE|WIFI|ROSTER|MANUAL), zone_id FK?, raw jsonb, observed_at, trust numeric  · *index (doctor_id, observed_at desc); partition/prune >30 days*
-**zones** — hospital_id FK, department_id FK?, name, kind(enum: OPD|WARD|OT|GATE|LOBBY) — what beacons/readers map to
+**zones** — hospital_id FK, department_id FK?, code (unique per hospital; what a beacon/reader is provisioned with — signals address zones by code, `name` is display-only), name, kind(enum: OPD|WARD|OT|GATE|LOBBY)
 **doctor_status** — doctor_id FK (unique), state(enum: PRESENT_IN_DEPT|PRESENT_ELSEWHERE|ON_ROUNDS|IN_SURGERY|ON_LEAVE|OFF_SHIFT|UNKNOWN), confidence numeric, zone_id FK?, since, evidence jsonb (signal ids + scores) — current fused state, one row per doctor
 **presence_transitions** — doctor_id FK, from_state, to_state, confidence, evidence jsonb, at — the audit/judge trail
 
