@@ -100,7 +100,7 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
   cold OTP delivery — an approved authentication template. Mock stays the default.
   Inbound over real WhatsApp is deliberately not built: it needs a public webhook with
   Meta's signature check, and nobody asked for it.
-- [~] **Vapi voice agent** (owner decision 2026-08-21) — built; booking blocked on a deploy.
+- [~] **Vapi voice agent** (owner decision 2026-08-21) — tools verified over the public internet; only the browser button is unproven.
   `POST /channels/vapi/tools` takes Vapi's tool-call envelope (`adapters/vapi.py` is the
   only code that knows its shape), authenticated by a shared secret header because Vapi
   cannot hold our JWT, and closed with a 503 when `VAPI_TOOL_SECRET` is unset. Three
@@ -119,39 +119,23 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
   reach us. **D28: a `cloudflared` quick tunnel, not a deploy** — `make tunnel` opens
   one, waits for the hostname, and re-points the assistant at it, refusing early if
   `VAPI_TOOL_SECRET` is unset so it never wires an assistant at an endpoint that 503s.
-- [x] **Telegram channel** (owner decision 2026-08-21) — @Swasthya_Setu_bot, free, first
-  in `CHANNEL_ORDER`. Mock default; `TELEGRAM_MOCK_MODE=false` + `TELEGRAM_BOT_TOKEN`
-  goes live. A bot cannot address anyone by phone number, so migration `0005` adds
-  `patients.telegram_chat_id` and `services/telegram_link.py` links it from the contact
-  the patient shares with the bot — Telegram verifies that number itself, and a
-  forwarded contact (`user_id` ≠ sender) is refused. `getUpdates` polling, not a
-  webhook: no public URL, and nothing breaks when the tunnel restarts. OTP goes there
-  only when the patient asks (`via: "telegram"`) and has linked — still exactly one
-  channel per code, never a fan-out.
-- [x] **SMS live mode via an Android handset** (owner decision 2026-08-21) —
-  `sms_real.py` posts to the Traccar SMS Gateway app on the LAN
-  (`SMS_GATEWAY_URL`/`SMS_GATEWAY_TOKEN`), replacing the MSG91 adapter that was never
-  built. Retries three times, because the usual failure is a sleeping phone and it
-  often answers the second time. **Payload shape is from the app's docs, not yet
-  verified against a real handset** — one live send will confirm it. Mock stays default.
-- [x] **Telegram verified live end-to-end** 2026-08-21 — real OTP and a real booking
-  confirmation delivered to a linked chat (`mock=false`, `channel=TELEGRAM`), and the
-  code from Telegram completed a patient login. Three defects found by doing it rather
-  than reading it: a space inside the bot token (Telegram answers that with a bare 404),
-  `.env.example` inline comments being swallowed into five values, and
-  `SMS_TEST_RECIPIENT` documented but never declared as a setting. `DEMO_PATIENT_PHONE`
-  now puts the operator's number on the first seeded patient, since a re-seed wipes both
-  the phone and the chat link.
-- [x] **Telegram is a full booking channel** (owner decision 2026-08-21, stands in for
-  WhatsApp until template approval) — language first, then Telegram's own contact-share
-  button, then department → time → confirm through the same `services/booking.py`.
-  **A number we do not know is registered on the spot** rather than turned away:
-  Telegram vouches for the number it hands over, which is a stronger claim than anything
-  typed into a form, and migration `0006` adds `patients.registered_via` so a
-  self-registration never gets mistaken for a hospital record. `CANCEL` is honoured,
-  because every confirmation promises it. Hindi and English throughout, and the language
-  chosen in the chat is written back to the patient — answering in Hindi someone who
-  just tapped English is the system telling them their choice did not count.
+- [x] **Telegram channel — a full booking alternative to WhatsApp, verified live**
+  (owner decision 2026-08-21). @Swasthya_Setu_bot: language → Telegram's own
+  contact-share button → department → time → confirm, through the same
+  `services/booking.py` as every other channel, in Hindi or English with the choice
+  written back to the patient. **A number we do not know registers on the spot** —
+  Telegram vouches for the number it hands over, which beats anything typed into a
+  form — and migration `0006` adds `patients.registered_via` so a self-registration is
+  never mistaken for a hospital record. `CANCEL` is honoured and frees the seat.
+  Verified against a real handset: OTP, booking confirmation and cancellation all
+  delivered with `mock=false`. Mock stays the default; migration `0005` added
+  `patients.telegram_chat_id` and the `TELEGRAM` channel value.
+- [x] **SMS live mode via an Android handset** — `sms_real.py` posts to the Traccar SMS
+  Gateway app, preferring its **Cloud relay** (`SMS_CLOUD_TOKEN`, pushes over FCM, no
+  LAN needed) and falling back to the LAN endpoint. Hard-capped at 30/day and 5/minute
+  in Redis, never used by tests, refused by `demo-check`. **Not verified against the
+  handset**: the phone answered no ARP on the LAN and the app's Cloud token is
+  `NotRegistered` — reopen the app for a fresh one, then `make sms-probe --send`.
 - [ ] Bhashini voice booking (constrained intent flow, mock mode + sandbox)
 - [ ] Outbound TTS reschedule calls (mock mode)
 - [ ] Kiosk mode skin for PWA
@@ -602,3 +586,55 @@ no SMTP config and asserts a 200 with a FAILED outbox row.
 **Next:** WhatsApp real mode (needs the token + phone number ID, and an approved
 authentication template — see below), then the Vapi voice agent (needs the key *and* a
 publicly reachable URL for its tool calls), then Bhashini.
+
+### 2026-08-21 (live channels: Telegram, email, Vapi tunnel — and the .env that broke three of them)
+
+**Everything green at close:** 175 backend tests, 13 frontend, lint clean, `demo-check`
+8/8. Migrations `0004`–`0006` applied (`patients.email`, `patients.telegram_chat_id`,
+`patients.registered_via`, plus `EMAIL` and `TELEGRAM` on the channel enum).
+
+**Telegram is now a full booking channel and the WhatsApp stand-in for the demo.**
+Language → contact share → department → time → confirm, Hindi or English, through the
+same `services/booking.py` as every other channel. A stranger self-registers on the
+spot; `CANCEL` works. Verified against a real handset end to end.
+
+**Email verified live through Gmail** — OTP and booking confirmation, `mock=false`,
+with an HTML part built from DESIGN.md tokens. Email joined `CHANNEL_ORDER` ahead of
+SMS, so until today nothing but an explicitly-addressed OTP could reach an inbox.
+
+**Vapi tools verified over the public internet** via `make tunnel` (D28: a cloudflared
+quick tunnel, not a deploy). A booking completed through the assistant's tool path from
+outside; a wrong secret gets 401. The browser call button is built but unproven — it
+needs `VITE_VAPI_PUBLIC_KEY` and `VITE_VAPI_ASSISTANT_ID`.
+
+**The lesson of the day: three integrations failed for the same reason, and it was our
+own documentation.** `.env.example` used inline `# comments` after values, and this
+parser keeps everything right of the `=`. Five settings had swallowed their own
+documentation — including the WhatsApp token, `SMTP_FROM` and `DEMO_PATIENT_EMAIL`. The
+Telegram token separately had a space pasted into the middle of it, which Telegram
+answers with a bare 404. Now: every comment in `.env.example` is on its own line,
+credentials that cannot contain whitespace are stripped with a warning, and anything
+claiming to be an address is parsed with `parseaddr` rather than checked for an `@`
+(the corrupted `SMTP_FROM` contained `you@gmail.com` and passed that check).
+
+**Other things found by using the software rather than reading it:**
+- `CANCEL` and "my appointments" filtered on *booked* but never on *time*, so cancelling
+  killed an appointment that had already happened. Same defect in the WhatsApp/IVR path.
+- The test suite's cleanup nulled **every** patient's `telegram_chat_id`, so running the
+  tests unlinked the live demo account mid-verification.
+- `SMS_TEST_RECIPIENT` was documented but never declared as a setting (D10, again).
+- A booking test asserted `len(after) > before` against a 500-row page cap: once the
+  outbox passed 500 the count saturated and the assertion could never be true.
+- `notify._fan_out` selected the adapter *outside* the try that guards sending, so a
+  mistyped `EMAIL_MOCK_MODE` 500'd the login endpoint instead of degrading (D27).
+
+**Safety rules for live SMS are enforced, not documented** (CLAUDE.md §Conventions):
+30/day and 5/minute in Redis, tests always mock regardless of `.env`, `demo-check`
+refuses a live gateway, and `/api/v1/health` reports which adapters are mocked.
+
+**Not verified, and why:** the SMS handset never answered on the LAN (no ARP reply
+anywhere on the `/24`) and its Cloud token is `NotRegistered`; WhatsApp live is parked
+on template approval. Both are one credential away, neither blocks the demo.
+
+**Next session: the UI.** Backend work pauses here — Bhashini is the next unchecked
+item when it resumes.
