@@ -511,3 +511,32 @@ where three is the ceiling. 124 backend tests.
 
 **Next session:** Phase 2 item 2 — Bhashini voice booking (constrained intent flow,
 mock mode + sandbox).
+
+### 2026-08-21 (later — Iron Rule 4 reworded, auth closed, email OTP)
+
+**Two decisions recorded.** Iron Rule 4 is now "the demo must SURVIVE offline": live
+integrations are welcome, the price is a mock that is the default, a single
+`<SERVICE>_MOCK_MODE` switch, and `demo-check` running the mock path. Rule 1 was
+reworded in the same edit, because "no feature may require a live external API" would
+have contradicted it. **D26: authentication stays ours** — JWT + phone/email OTP, no
+Supabase, Clerk, Better Auth or any hosted IdP. Closed; a hosted login cannot be mocked
+and cannot run at a venue with no internet.
+
+**Email OTP shipped** (owner decision, added to Phase 2). Same service, same JWT, second
+contact. Phone and email are separate Redis namespaces — one keyspace would let a code
+mailed to an inbox be spent against a phone number that normalises the same. Migration
+`0004` adds `patients.email` and `EMAIL` on the channel enum. `DEMO_PATIENT_EMAIL` puts
+a real address on the first seeded patient so the flow can be demoed against an inbox
+you can open; without it nobody has an address, which is the honest default.
+
+**D27, found while wiring it:** `notify._fan_out` selected the adapter *outside* the try
+that guards sending. A live adapter with missing credentials raises while being
+constructed, so a mistyped `EMAIL_MOCK_MODE` would have 500'd the login endpoint rather
+than degrading — precisely what the reworded rule forbids. The test flips the flag with
+no SMTP config and asserts a 200 with a FAILED outbox row.
+
+132 backend tests, 12 frontend, lint clean, demo-check 8/8 (on compose).
+
+**Next:** WhatsApp real mode (needs the token + phone number ID, and an approved
+authentication template — see below), then the Vapi voice agent (needs the key *and* a
+publicly reachable URL for its tool calls), then Bhashini.
