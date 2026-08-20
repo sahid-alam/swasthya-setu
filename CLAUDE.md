@@ -3,6 +3,8 @@
 AI-driven doctor availability & appointment allocation system for Himachal Pradesh hospitals.
 Smart India Hackathon 2026 — Team ALTAIR. Grand Finals: December 2026.
 
+**New session? Read `docs/HANDOFF.md` first — it is the 2-minute catch-up.**
+
 **Read `docs/PRD.md` before building any feature. Read `docs/PLAN.md` at the start of every session and tick checkboxes as you complete items. Read `docs/DESIGN.md` before building anything in `frontend/`. Update the Session Log at the bottom of PLAN.md before ending every session.**
 
 ## What this system is

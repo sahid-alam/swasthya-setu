@@ -1,4 +1,5 @@
 {
+  "includeCoAuthoredBy": false,Hi! 
   "permissions": {
     "allow": [
       "Bash(make:*)",

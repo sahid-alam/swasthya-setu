@@ -1,4 +1,4 @@
-.PHONY: install bootstrap-local dev dev-local migrate seed demo test lint train
+.PHONY: install bootstrap-local dev dev-local migrate seed demo demo-check test lint train
 
 # From a clean checkout, with postgres + redis running:
 #   make install bootstrap-local migrate seed test
@@ -34,6 +34,9 @@ train:             ## retrain ML artifacts (downloads the 110k dataset on first 
 
 demo: migrate seed  ## seeded demo day + scripted scenario
 	@echo "scripted scenario lands in Phase 3 — see infra/demo-script.md"
+
+demo-check:        ## Iron Rule 4 guard: walk the spine against a running stack
+	backend/.venv/bin/python infra/demo_check.py
 
 test:
 	cd backend && .venv/bin/pytest -q
