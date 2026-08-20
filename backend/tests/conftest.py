@@ -3,6 +3,7 @@ import os
 # Must be set before app.config is imported — the engine is built at import time.
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://setu:setu@localhost:5432/swasthya")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+os.environ.setdefault("PRESENCE_SWEEP_SECONDS", "0")  # no background re-fusion mid-test
 os.environ.setdefault("JWT_SECRET", "test-secret-at-least-32-bytes-long-for-hs256")
 
 import pytest  # noqa: E402

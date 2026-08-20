@@ -96,7 +96,8 @@ async def test_presence_evidence_survives_a_zone_being_removed(db):
 
     zone = await scalar(
         db,
-        "insert into zones (hospital_id, name, kind) values (:h, :n, 'GATE') returning id",
+        "insert into zones (hospital_id, code, name, kind)"
+        " values (:h, :n, :n, 'GATE') returning id",
         h=hospital,
         n=f"probe-{uuid.uuid4().hex[:8]}",
     )

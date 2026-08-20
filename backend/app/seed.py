@@ -5,6 +5,7 @@ Run: cd backend && .venv/bin/python -m app.seed
 """
 
 import asyncio
+import math
 import random
 from datetime import UTC, datetime, time, timedelta
 
@@ -88,9 +89,18 @@ VILLAGES = [
 ]
 
 
+def unit_vector(rng: random.Random, dim: int = 512) -> list[float]:
+    """Stand-in for an ArcFace embedding. Real enrolment runs InsightFace on the
+    kiosk image and stores only this vector — the simulator posts one directly."""
+    v = [rng.gauss(0, 1) for _ in range(dim)]
+    norm = math.sqrt(sum(x * x for x in v))
+    return [round(x / norm, 6) for x in v]
+
+
 async def main() -> None:
     rng = random.Random(2026)  # fixed: the demo must look the same every run
-    today = datetime.now(UTC).date()
+    now = datetime.now(UTC)
+    today = now.date()
 
     async with SessionLocal() as db:
         await db.execute(
@@ -129,6 +139,24 @@ async def main() -> None:
         badge = 1000
         doctor_count = 0
         for hosp in hospitals:
+            # shared zones every doctor can move through — personas need somewhere
+            # to walk to that is not their own OPD room
+            for kind, label in [
+                (ZoneKind.GATE, "Main Gate"),
+                (ZoneKind.LOBBY, "Reception Lobby"),
+                (ZoneKind.WARD, "General Ward"),
+                (ZoneKind.OT, "Operation Theatre"),
+            ]:
+                db.add(
+                    Zone(
+                        hospital_id=hosp.id,
+                        department_id=None,
+                        code=f"{hosp.code}-{kind.value}",
+                        name=label,
+                        kind=kind,
+                    )
+                )
+
             for dept_name, code, rooms, per_hosp in DEPARTMENTS:
                 dept = Department(
                     hospital_id=hosp.id, name=dept_name, specialty_code=code, room_count=rooms
@@ -140,6 +168,7 @@ async def main() -> None:
                     Zone(
                         hospital_id=hosp.id,
                         department_id=dept.id,
+                        code=f"{hosp.code}-{code}-OPD",
                         name=f"{dept_name} OPD",
                         kind=ZoneKind.OPD,
                     )
@@ -159,23 +188,31 @@ async def main() -> None:
                     db.add(user)
                     await db.flush()
 
+                    enrolled = rng.random() < 0.6
                     doc = Doctor(
                         user_id=user.id,
                         hospital_id=hosp.id,
                         department_id=dept.id,
                         specialty=code,
-                        badge_id=f"BADGE-{badge}",
-                        face_enrolled=rng.random() < 0.6,
+                        badge_id=f"HP-DOC-{badge}",
+                        face_enrolled=enrolled,
+                        face_embedding=unit_vector(rng) if enrolled else None,
                         avg_consult_minutes=rng.choice([8, 10, 12, 15]),
                     )
                     db.add(doc)
                     await db.flush()
 
-                    # a week of OPD rosters, so presence has something to fall back to
+                    # A week of OPD rosters, so presence has something to fall back to.
+                    # Day 0 is anchored around *now* rather than a fixed clock hour:
+                    # `make seed` must leave doctors mid-shift whatever time the demo
+                    # is rehearsed at, or every board reads OFF_SHIFT (Iron Rule 4).
                     for day in range(7):
-                        start = datetime.combine(
-                            today + timedelta(days=day), time(9, 0), tzinfo=UTC
-                        )
+                        if day == 0:
+                            start = now - timedelta(hours=2)
+                        else:
+                            start = datetime.combine(
+                                today + timedelta(days=day), time(9, 0), tzinfo=UTC
+                            )
                         db.add(
                             Shift(
                                 doctor_id=doc.id,
@@ -192,7 +229,7 @@ async def main() -> None:
                             doctor_id=doc.id,
                             state=PresenceState.UNKNOWN,
                             confidence=0,
-                            since=datetime.now(UTC),
+                            since=now,
                             evidence={"reason": "seeded, no signals yet"},
                         )
                     )

@@ -43,7 +43,10 @@ services:
       COUCHDB_URL: http://admin:admin@couchdb:5984
       JWT_SECRET: dev-only-not-a-secret
     ports: ["8000:8000"]
-    volumes: ["../backend:/app"]
+    # anonymous volume on .venv: the bind mount would otherwise let the container's
+    # `uv sync` overwrite the host venv with /app-relative shebangs, breaking
+    # `make test` outside docker. Same reason node_modules is masked below.
+    volumes: ["../backend:/app", "/app/.venv"]
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
