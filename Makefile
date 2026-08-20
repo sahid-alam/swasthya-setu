@@ -1,4 +1,4 @@
-.PHONY: install bootstrap-local dev dev-local migrate seed demo demo-check test lint train tunnel
+.PHONY: install bootstrap-local dev dev-local migrate seed demo demo-check test lint train tunnel sms-probe
 
 # From a clean checkout, with postgres + redis running:
 #   make install bootstrap-local migrate seed test
@@ -34,6 +34,9 @@ train:             ## retrain ML artifacts (downloads the 110k dataset on first 
 
 demo: migrate seed  ## seeded demo day + scripted scenario
 	@echo "scripted scenario lands in Phase 3 — see infra/demo-script.md"
+
+sms-probe:         ## check the phone gateway; --send for ONE real message
+	cd backend && .venv/bin/python ../infra/sms_probe.py $(ARGS)
 
 tunnel:            ## publish the local backend for Vapi and re-point the assistant
 	bash infra/tunnel.sh

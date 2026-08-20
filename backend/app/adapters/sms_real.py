@@ -79,15 +79,25 @@ async def over_limit(now: datetime | None = None) -> str | None:
     return None
 
 
+# Traccar's hosted relay takes the same body as the handset and pushes it over FCM, so
+# it reaches the phone on mobile data. The LAN endpoint only works when both devices are
+# on the same wifi AND the phone is awake enough to answer ARP, which is a lot to ask of
+# a demo. Cloud wins whenever its token is set.
+CLOUD_URL = "https://www.traccar.org/sms/"
+
+
 class GatewaySms(MessagingAdapter):
     channel = Channel.SMS
 
     def __init__(self) -> None:
         s = get_settings()
-        if not s.sms_gateway_url:
-            raise AdapterError("SMS_MOCK_MODE is false but SMS_GATEWAY_URL is not set")
-        self._url = s.sms_gateway_url.rstrip("/") + "/"
-        self._token = s.sms_gateway_token
+        self._cloud = bool(s.sms_cloud_token)
+        if not (self._cloud or s.sms_gateway_url):
+            raise AdapterError(
+                "SMS_MOCK_MODE is false but neither SMS_CLOUD_TOKEN nor " "SMS_GATEWAY_URL is set"
+            )
+        self._url = CLOUD_URL if self._cloud else s.sms_gateway_url.rstrip("/") + "/"
+        self._token = s.sms_cloud_token if self._cloud else s.sms_gateway_token
 
     async def send(self, *, to: str, template: str, params: dict) -> DeliveryResult:
         number = normalise_phone(to)
@@ -119,13 +129,21 @@ class GatewaySms(MessagingAdapter):
                     continue
 
                 if r.is_success:
+                    # The cloud relay answers 200 even when FCM refused the handset:
+                    # the verdict is in the body. Trusting the status code alone would
+                    # record a delivery that never left Google's servers.
+                    failure = self._cloud_failure(r) if self._cloud else None
+                    if failure:
+                        last = failure
+                        break
                     return DeliveryResult(
                         status=NotificationStatus.SENT,
                         mock=False,
-                        provider_ref=new_ref("gw"),
+                        provider_ref=new_ref("cloud" if self._cloud else "gw"),
                         payload={
                             "to": number,
                             "body": body,
+                            "via": "cloud" if self._cloud else "lan",
                             "segments": len(body) // 160 + 1,
                         },
                     )
@@ -141,6 +159,26 @@ class GatewaySms(MessagingAdapter):
             error=last,
             payload={"to": number, "body": body},
         )
+
+    @staticmethod
+    def _cloud_failure(r: httpx.Response) -> str | None:
+        """Traccar relays FCM's answer verbatim inside a 200."""
+        try:
+            body = r.json()
+        except ValueError:
+            return None
+        if body.get("failureCount"):
+            first = (body.get("responses") or [{}])[0].get("error") or {}
+            code = str(first.get("code", "unknown"))
+            stale = "not-registered" in code or "NotRegistered" in str(first.get("message", ""))
+            hint = (
+                " — the app's Cloud token has expired; reopen the gateway app and copy"
+                " the new one into SMS_CLOUD_TOKEN"
+                if stale
+                else ""
+            )
+            return f"cloud relay refused: {code}{hint}"
+        return None
 
     async def health(self) -> bool:
         try:

@@ -17,6 +17,7 @@ NO_WHITESPACE = (
     "vapi_public_key",
     "smtp_password",
     "sms_gateway_token",
+    "sms_cloud_token",
 )
 
 
@@ -54,6 +55,13 @@ class Settings(BaseSettings):
     # Gateway app, reachable on the LAN (never localhost from inside compose).
     sms_gateway_url: str = ""
     sms_gateway_token: str = ""
+    # Traccar's Cloud Service: it pushes to the handset over FCM, so it works when the
+    # phone is not on this LAN — which is most of the time. Set it and cloud wins.
+    sms_cloud_token: str = ""
+    # Declared so it is read from .env at all. A documented variable that nothing reads
+    # is exactly the failure D10 exists to prevent — and it is why SMS_TEST_RECIPIENT
+    # appeared unset after being added to the file.
+    sms_test_recipient: str = ""
 
     # Only read when telegram_mock_mode is false.
     telegram_bot_token: str = ""

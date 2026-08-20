@@ -251,3 +251,45 @@ def test_over_the_ceiling_is_a_failed_row_not_an_exception(client, monkeypatch):
     )
     assert result.status is NotificationStatus.FAILED
     assert "rate limit" in result.error
+
+
+def test_the_cloud_relay_answers_200_even_when_it_refused(client, monkeypatch):
+    """Traccar's relay returns 200 and puts FCM's verdict in the body. Trusting the
+    status code would record a delivery that never left Google's servers — which is
+    exactly what a stale Cloud token looks like."""
+    import httpx
+
+    from app.adapters import sms_real
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "sms_cloud_token", "stale-token", raising=False)
+    _stub(
+        monkeypatch,
+        [
+            httpx.Response(
+                200,
+                json={
+                    "successCount": 0,
+                    "failureCount": 1,
+                    "responses": [
+                        {
+                            "success": False,
+                            "error": {
+                                "code": "messaging/registration-token-not-registered",
+                                "message": "NotRegistered",
+                            },
+                        }
+                    ],
+                },
+            )
+        ],
+    )
+
+    result = client.portal.call(
+        lambda: sms_real.GatewaySms().send(
+            to="9418000001", template="otp", params={"code": "1", "minutes": 5}
+        )
+    )
+    assert result.status is NotificationStatus.FAILED
+    assert "cloud relay refused" in result.error
+    assert "SMS_CLOUD_TOKEN" in result.error, "the error must name the fix"
