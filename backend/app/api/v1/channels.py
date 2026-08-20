@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import events
-from app.adapters.base import CallTurn
+from app.adapters.base import AdapterError, CallTurn
 from app.adapters.factory import telephony
 from app.adapters.whatsapp_mock import MENU, parse_reply
 from app.db import get_db
@@ -175,7 +175,9 @@ async def _turn(db: AsyncSession, body: InboundIn, session: dict) -> ReplyOut:
     return ReplyOut(reply=MENU.get(lang, MENU["EN"]), state="menu")
 
 
-async def _upcoming(db: AsyncSession, patient_id: uuid.UUID) -> str:
+async def _upcoming(db: AsyncSession, patient_id: uuid.UUID, spoken: bool = False) -> str:
+    """`spoken` is the voice form: no em-dashes for a TTS engine to read out, and
+    three at most, because that is the ceiling a caller can hold (IVR_MAX_OPTIONS)."""
     from app.models import Appointment, AppointmentStatus, Slot
 
     rows = (
@@ -187,9 +189,13 @@ async def _upcoming(db: AsyncSession, patient_id: uuid.UUID) -> str:
                 Appointment.status == AppointmentStatus.BOOKED,
             )
             .order_by(Slot.starts_at)
-            .limit(5)
+            .limit(IVR_MAX_OPTIONS if spoken else 5)
         )
     ).all()
+    if spoken:
+        return ". ".join(
+            f"{s.starts_at:%d %B, %H:%M}, token {a.token_number or '—'}" for a, s in rows
+        )
     return "\n".join(f"{s.starts_at:%d %b %H:%M} — token {a.token_number or '—'}" for a, s in rows)
 
 
@@ -215,7 +221,7 @@ PROMPTS = {
         "booked": "Your appointment is confirmed with {doctor} on {when}. "
         "Your token number is {token}. We have sent you a message. Goodbye.",
         "failed": "Sorry, that time has just been taken. Goodbye.",
-        "upcoming": "Your appointments. {options} Goodbye.",
+        "upcoming": "Your appointments. {options}. Goodbye.",
         "no_upcoming": "You have no upcoming appointments. Goodbye.",
         "again": "Sorry, I did not get that. ",
     },
@@ -231,7 +237,7 @@ PROMPTS = {
         "booked": "{when} को {doctor} के साथ आपका अपॉइंटमेंट तय हो गया है। "
         "आपका टोकन नंबर {token} है। हमने आपको संदेश भेज दिया है। धन्यवाद।",
         "failed": "क्षमा करें, यह समय अभी किसी और ने ले लिया है। धन्यवाद।",
-        "upcoming": "आपके अपॉइंटमेंट। {options} धन्यवाद।",
+        "upcoming": "आपके अपॉइंटमेंट। {options}। धन्यवाद।",
         "no_upcoming": "आपका कोई आगामी अपॉइंटमेंट नहीं है। धन्यवाद।",
         "again": "क्षमा करें, समझ नहीं आया। ",
     },
@@ -279,13 +285,21 @@ async def ivr_webhook(
     payload: dict, db: AsyncSession = Depends(get_db), _=Depends(STAFF)
 ) -> VoiceReplyOut:
     """One keypress of one call. The provider's field names stop at the adapter."""
-    turn = telephony().parse_call(payload)
+    try:
+        turn = telephony().parse_call(payload)
+    except AdapterError:
+        # A withheld or malformed caller id. We cannot know who is calling, so the
+        # caller hears why and the call ends — the provider needs a 200 with something
+        # to play, not a 500 (`AdapterError`: degrade, never crash a flow).
+        return VoiceReplyOut(
+            say=_say("EN", "unknown_caller"), gather=None, hangup=True, state="unknown_caller"
+        )
+
     session = await load_call(turn.call_id)
     reply = await _ivr_turn(db, turn, session)
     if reply.hangup:
         await clear_call(turn.call_id)
     else:
-        session["say"] = reply.say  # replayed verbatim if the next press is not usable
         await save_call(turn.call_id, session)
     return reply
 
@@ -300,15 +314,20 @@ async def _ivr_turn(db: AsyncSession, turn: CallTurn, session: dict) -> VoiceRep
     lang = patient.preferred_language.value
     state = session["state"]
 
+    def prompt(say: str, state: str) -> VoiceReplyOut:
+        """Remember the clean wording. A re-prompt replays what is stored, so storing
+        the apology too is how a caller who presses wrong twice hears it twice."""
+        session["say"] = say
+        return VoiceReplyOut(say=say, state=state)
+
+    def again() -> VoiceReplyOut:
+        return VoiceReplyOut(say=_say(lang, "again") + session["say"], state=state)
+
     # Silence, a nonsense press, or the call simply connecting: say the same thing
     # again and do not move. Clearing state here is how a caller ends up indexing a
     # list they can no longer hear — the digits version of the WhatsApp bug above.
     if turn.digits is None:
-        prior = session.get("say")
-        return VoiceReplyOut(
-            say=(_say(lang, "again") + prior) if prior else _say(lang, "menu"),
-            state=state,
-        )
+        return again() if session.get("say") else prompt(_say(lang, "menu"), state)
 
     choice = int(turn.digits)
 
@@ -317,7 +336,7 @@ async def _ivr_turn(db: AsyncSession, turn: CallTurn, session: dict) -> VoiceRep
     if state == "choosing_department":
         depts = session.get("departments", [])
         if not 1 <= choice <= len(depts):
-            return VoiceReplyOut(say=_say(lang, "again") + session.get("say", ""), state=state)
+            return again()
         offers = await booking.search_slots(
             db, department_id=uuid.UUID(depts[choice - 1]), limit=IVR_MAX_OPTIONS
         )
@@ -326,22 +345,21 @@ async def _ivr_turn(db: AsyncSession, turn: CallTurn, session: dict) -> VoiceRep
                 say=_say(lang, "no_slots"), gather=None, hangup=True, state="no_slots"
             )
         session.update(state="choosing_slot", slots=[str(o.slot_id) for o in offers])
-        return VoiceReplyOut(
-            say=_say(
+        return prompt(
+            _say(
                 lang,
                 "slots",
                 options=_options(
-                    lang,
-                    [f"{o.starts_at:%d %B, %H:%M}, {o.doctor_name}" for o in offers],
+                    lang, [f"{o.starts_at:%d %B, %H:%M}, {o.doctor_name}" for o in offers]
                 ),
             ),
-            state=session["state"],
+            session["state"],
         )
 
     if state == "choosing_slot":
         slots = session.get("slots", [])
         if not 1 <= choice <= len(slots):
-            return VoiceReplyOut(say=_say(lang, "again") + session.get("say", ""), state=state)
+            return again()
         try:
             appt = await booking.book(
                 db,
@@ -387,26 +405,24 @@ async def _ivr_turn(db: AsyncSession, turn: CallTurn, session: dict) -> VoiceRep
             )
         ).all()
         session.update(state="choosing_department", departments=[str(d.id) for d, _ in rows])
-        return VoiceReplyOut(
-            say=_say(
+        return prompt(
+            _say(
                 lang,
                 "departments",
                 options=_options(lang, [f"{d.name}, {h.name}" for d, h in rows]),
             ),
-            state=session["state"],
+            session["state"],
         )
 
     if choice == 2:
-        listing = await _upcoming(db, patient.id)
+        listing = await _upcoming(db, patient.id, spoken=True)
         return VoiceReplyOut(
-            say=(
-                _say(lang, "upcoming", options=listing.replace("\n", ". "))
-                if listing
-                else _say(lang, "no_upcoming")
-            ),
+            say=(_say(lang, "upcoming", options=listing) if listing else _say(lang, "no_upcoming")),
             gather=None,
             hangup=True,
             state="upcoming",
         )
 
-    return VoiceReplyOut(say=_say(lang, "again") + _say(lang, "menu"), state="menu")
+    session["state"] = "menu"
+    session["say"] = _say(lang, "menu")
+    return again()

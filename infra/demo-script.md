@@ -308,8 +308,12 @@ backend/.venv/bin/python simulators/ivr_call.py 9868553803 1 1 1
 > appointment is on the dashboard next to the others, marked as having come in by
 > phone."
 
-The caller has no screen to go back to, so the SMS is her only record — it is in the
-outbox from step 16, `template: booked`.
+The caller has no screen to go back to, so the message is her only record:
+
+```bash
+curl -s "localhost:8000/api/v1/notifications?limit=10" -H "Authorization: Bearer $TOK" \
+  | python3 -c "import sys,json;rows=[n for n in json.load(sys.stdin) if n['template']=='booked'];print(json.dumps(rows[:1],ensure_ascii=False,indent=2))"
+```
 
 ### 16. "Did those thirty-nine patients actually get told?" (30s)
 

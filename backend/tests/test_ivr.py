@@ -98,6 +98,28 @@ def test_an_out_of_range_press_is_corrected_not_crashed(client, auth, caller, ca
     assert again["state"] == "choosing_department" and not again["hangup"]
 
 
+def test_pressing_wrong_twice_does_not_stack_the_apology(client, auth, caller, call_id):
+    """The session remembers the last clean prompt, not the last thing said. Storing
+    the apology too means a caller who presses wrong twice hears it twice."""
+    dial(client, auth, caller, call_id)
+    dial(client, auth, caller, call_id, "1")
+    first = dial(client, auth, caller, call_id, "9")
+    second = dial(client, auth, caller, call_id, "9")
+    assert first["say"] == second["say"]
+
+
+def test_a_caller_we_cannot_identify_is_answered_not_dropped(client, auth):
+    """A withheld or malformed caller id fails at the adapter. The provider still needs
+    a 200 with something to play — AdapterError degrades, it does not crash a flow."""
+    r = client.post(
+        "/api/v1/channels/ivr/webhook",
+        headers=auth,
+        json={"CallSid": "CA-withheld", "From": "unknown"},
+    )
+    assert r.status_code == 200
+    assert r.json()["hangup"] is True and r.json()["state"] == "unknown_caller"
+
+
 def test_an_unknown_number_is_told_what_to_do_and_hung_up(client, auth, call_id):
     reply = dial(client, auth, "9990000000", call_id)
     assert reply["state"] == "unknown_caller"

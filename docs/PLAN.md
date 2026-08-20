@@ -493,5 +493,15 @@ against the running stack books a real appointment with `channel=IVR` and lands 
 answered in Hindi, chosen from her record rather than by asking her to pick a language.
 122 backend tests, 12 frontend, lint clean, demo-check 8/8. The runbook has it as §15.
 
+**Two bugs found by review after the tick, both fixed with regression tests.** The
+session stored *the last thing said* rather than the last clean prompt, so a caller who
+pressed a wrong key twice heard "Sorry, I did not get that" twice, three times for three
+— the apology accumulated. And an unparseable caller id (`From: unknown`, a withheld
+number) raised `AdapterError` straight out of the route as a 500, in the one feature
+whose adapter docstring says callers degrade rather than crash. It now answers, says why,
+and hangs up: a provider needs a 200 with something to play. `_upcoming()` also grew a
+`spoken` form — the text version feeds em-dashes to a TTS engine and offers five items
+where three is the ceiling. 124 backend tests.
+
 **Next session:** Phase 2 item 2 — Bhashini voice booking (constrained intent flow,
 mock mode + sandbox).

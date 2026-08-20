@@ -19,6 +19,8 @@ with an empty clinic otherwise.
 ## Run it
 
 ```bash
+# compose publishes 5432/6379 too — `docker compose -f infra/docker-compose.yml down`
+# first, or these will not bind
 brew services start postgresql@17 && brew services start redis
 make install bootstrap-local migrate seed
 
