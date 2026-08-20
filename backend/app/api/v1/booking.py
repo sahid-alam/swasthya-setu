@@ -10,7 +10,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
@@ -261,3 +261,93 @@ async def pwa_context(db: AsyncSession = Depends(get_db), _=Depends(STAFF)) -> P
             id=str(patient.id), name=patient.name, language=patient.preferred_language.value
         ),
     )
+
+
+class MyQueueOut(BaseModel):
+    appointment_id: str
+    doctor_name: str
+    hospital: str
+    scheduled_for: datetime
+    token_number: int | None
+    position: int | None
+    predicted_wait_minutes: int | None
+    status: AppointmentStatus
+
+
+@router.get("/pwa/my-queue/{patient_id}", response_model=list[MyQueueOut])
+async def my_queue(
+    patient_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(STAFF)
+) -> list[MyQueueOut]:
+    """What a patient actually wants to know: am I still on the list, and how long.
+
+    Position is counted within the doctor's own list, not the department's — "you are
+    number 4" means nothing if it counts people queueing for someone else.
+    """
+    from datetime import UTC
+
+    from app.services import models as ml
+
+    mine = (
+        await db.execute(
+            select(Appointment, Slot)
+            .join(Slot, Slot.id == Appointment.slot_id)
+            .where(
+                Appointment.patient_id == patient_id,
+                Appointment.status.in_(
+                    [
+                        AppointmentStatus.BOOKED,
+                        AppointmentStatus.CHECKED_IN,
+                        AppointmentStatus.RESCHEDULE_PENDING,
+                    ]
+                ),
+            )
+            .order_by(Slot.starts_at)
+        )
+    ).all()
+
+    out: list[MyQueueOut] = []
+    now = datetime.now(UTC)
+    for appt, slot in mine:
+        doctor, user, hosp = (
+            await db.execute(
+                select(Doctor, User, Hospital)
+                .join(User, User.id == Doctor.user_id)
+                .join(Hospital, Hospital.id == Doctor.hospital_id)
+                .where(Doctor.id == slot.doctor_id)
+            )
+        ).one()
+
+        ahead = (
+            await db.execute(
+                select(func.count(Appointment.id))
+                .join(Slot, Slot.id == Appointment.slot_id)
+                .where(
+                    Slot.doctor_id == slot.doctor_id,
+                    Slot.starts_at >= now,
+                    Slot.starts_at < slot.starts_at,
+                    Appointment.status == AppointmentStatus.BOOKED,
+                )
+            )
+        ).scalar_one()
+
+        out.append(
+            MyQueueOut(
+                appointment_id=str(appt.id),
+                doctor_name=user.name,
+                hospital=hosp.name,
+                scheduled_for=slot.starts_at,
+                token_number=appt.token_number,
+                position=ahead + 1 if slot.starts_at >= now else None,
+                predicted_wait_minutes=(
+                    ml.predict_wait_minutes(
+                        ahead_in_queue=ahead,
+                        avg_consult_minutes=doctor.avg_consult_minutes,
+                        current_delay_minutes=max((now - slot.starts_at).total_seconds() / 60, 0),
+                    )
+                    if slot.starts_at >= now
+                    else None
+                ),
+                status=appt.status,
+            )
+        )
+    return out

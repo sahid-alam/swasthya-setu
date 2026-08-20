@@ -45,11 +45,14 @@ Order matters: presence → optimizer → one channel → dashboard, then widen.
 - [x] SimPy comparison script: CP-SAT vs FCFS on identical demand (produces the judge chart)
 
 ### 1C. Patient access core
-- [ ] Booking API (channel-agnostic): search slots, book, cancel, reschedule
-- [ ] PWA booking flow (Hindi + English), queue position view, offline PouchDB queue + sync
-- [ ] WhatsApp adapter (mock mode default) with guided flow
-- [ ] SMS adapter (mock mode default): confirmations + reschedule notices
-- [ ] Notification service consuming reschedule events → channel fan-out with delivery log
+- [x] Booking API (channel-agnostic): search slots, book, cancel, reschedule
+- [x] PWA booking flow (Hindi + English), queue position view, offline queue + sync —
+  offline path verified in a browser (book offline → queue → reconnect → drains to 0).
+  **Not PouchDB**: localStorage + REST replay, ARCHITECTURE D23 supersedes D6.
+  *Patient self-service auth (phone OTP) is NOT built — this app is staff/kiosk operated.*
+- [x] WhatsApp adapter (mock mode default) with guided flow
+- [x] SMS adapter (mock mode default): confirmations + reschedule notices
+- [x] Notification service consuming reschedule events → channel fan-out with delivery log
 
 ### 1D. Command center
 - [x] Presence board (live, per hospital/department) — brought forward from 1D for the
@@ -272,3 +275,60 @@ artifacts are reachable. Not re-run since those edits — verify before relying 
 
 **Next session picks up:** Phase 1C, first item — the channel-agnostic booking API.
 Still open: the Supabase question (2026-08-19 entry).
+
+### 2026-08-20 (later — 1B gaps closed, Phase 1C)
+
+**demo-check discipline:** a baseline was taken *before* touching anything — 6/7, the
+only FAIL being `notifications` (the 1C service that did not exist). Every item since
+was followed by a re-run. Final state **7/7**. 99 backend + 12 frontend tests, lint clean,
+suite stable over three consecutive runs.
+
+**Supabase: closed, no.** Decision recorded; no code was ever written either way.
+
+**1B gaps closed**
+- Migration 0003 adds `RESCHEDULE_PENDING`. A replan that cannot seat someone no longer
+  cancels them silently — `GET /scheduling/pending` lists them with name and phone so
+  staff can actually ring them, and 1C now sends them a message saying so.
+- The seed contains three genuinely high-risk bookings so overbooking is a feature
+  someone has watched run: ~95 days lead time, no reminder, young patient — the profile
+  the real 110k dataset flags. The model scores them 0.55 unaided. Verified: two seats
+  offered to the solver at capacity 2.
+
+**Phase 1C**
+- `services/booking.py` is the single channel-agnostic implementation. PWA, WhatsApp and
+  the kiosk all call it, so the same patient cannot get different answers by asking a
+  different way.
+- Adapters follow the skill exactly: interface first, mock first, factory on
+  `*_MOCK_MODE` defaulting true. Mocks have realistic latency and a real failure rate,
+  and write to `notifications` — that table is the demo outbox (D4).
+- Message bodies live in `adapters/base.render`, Hindi and English, so channels cannot
+  drift apart.
+- PWA booking is Hindi-first and flair-free per §9b; offline booking queues locally and
+  drains on reconnect, verified in a browser with the network actually cut.
+
+**Four bugs found by looking at output rather than status codes:**
+- The reschedule SMS named the *new* doctor as "unavailable" — it reads as a system
+  error to the patient. `{doctor}` is now unambiguously who they will see.
+- The WhatsApp flow read intent before state, so replying "1" to pick department 1
+  restarted booking. State beats intent while a choice is pending.
+- The menu fallback showed the menu without resetting state, so the next digit was read
+  as a selection from a list the patient could no longer see.
+- The SMS fallback test was flaky: the mock fails 3% of the time by design, so the test
+  now seeds it. It is about the fallback firing, not gateway luck.
+
+**Process note, third time now:** blind `str.replace` patches silently no-op when black
+has reformatted the target since it was written. Use the Edit tool for surgical edits —
+it fails loudly on no-match. Reserve `str.replace` for files written in the same step.
+
+**Deferred by explicit decision:** Docker re-verification (compose gained `libgomp1` and
+an `../ml:/ml:ro` mount but has not been re-run). The demo runs on `dev-local`.
+
+**Known gaps, stated honestly:**
+- Patient self-service auth does not exist. Nothing in the UI implies it does, but do not
+  describe the PWA as "a patient logging in".
+- WhatsApp conversation state is an in-process dict. Fine for one worker; needs Redis
+  before a second one.
+- IVR, Bhashini voice and the kiosk skin are Phase 2, untouched.
+
+**Next session picks up:** Phase 1D — queue view with predicted waits, alerts
+(roster-vs-presence mismatch), Leaflet network map, scenario triggers panel.
