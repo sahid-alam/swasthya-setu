@@ -50,10 +50,10 @@ If a make target doesn't exist yet, creating it is part of Phase 0.
 
 ## Iron rules
 
-1. **Simulator-first.** No feature may require physical hardware or a live external API to demo. Every signal source and every integration must work in `MOCK_MODE`. See `.claude/skills/signal-simulator/` and `.claude/skills/integration-adapter/`.
+1. **Simulator-first.** Every signal source and every integration ships with a simulator or mock that needs no hardware, no vendor account and no internet. Live mode is welcome on top of that — the mock is what makes the thing demoable, not a lesser version of it. See `.claude/skills/signal-simulator/` and `.claude/skills/integration-adapter/`.
 2. **Adapters for all external services.** Bhashini, WhatsApp Cloud API, Exotel, MSG91, ABDM, e-RaktKosh, OSRM — always behind an adapter interface with a per-service `*_MOCK_MODE` env flag. Never call a vendor SDK from business logic.
 3. **Tiers are law.** Tier 1 features must be flawless before Tier 2 work starts. See PRD §Tiers.
-4. **Demo is a product feature.** `make demo` must always work on a clean checkout with no internet. If a change breaks the demo, fixing it is priority zero.
+4. **The demo must SURVIVE offline.** Live integrations are welcome and encouraged — real SMTP, a real WhatsApp number, a real voice agent. The price of adding one is: it has a mock, **the mock is the default**, and the switch is a single `<SERVICE>_MOCK_MODE` env var, nothing else. `make demo` and `make demo-check` run the mock path on a clean checkout with no internet, and **that** is the path that must be green — a mock that exists but is never exercised is not a fallback. If a change breaks it, fixing it is priority zero.
 5. **Real data where promised.** e-RaktKosh, HMIS footfall, HP road network, 110k-appointment benchmark — ingest per `docs/PRD.md §Data`. If real data is unavailable, generate synthetic data with the same schema and label it synthetic in the UI.
 6. **No secrets in code.** Everything via env vars; keep `.env.example` current.
 
