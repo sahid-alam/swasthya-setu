@@ -9,12 +9,12 @@ Everything below is state a fresh session cannot infer from the code in reasonab
 all Phase 2 (Tier 2 modules) and Phase 3 (hardening).
 
 - 113 backend tests, 12 frontend tests, `make lint` clean, suite stable across repeat runs
-- `make demo-check` is **7/7** — that is the Iron Rule 4 guard, run it after anything
+- `make demo-check` is **8/8** — that is the Iron Rule 4 guard, run it after anything
   touching the spine
-- Working tree clean at `e4e6a01`
 
-**Not yet done for Phase 1 exit:** the spine demo has not been run 3× consecutively as
-`docs/PLAN.md` requires. That is the first thing to do.
+**Phase 1 exit is met** (2026-08-20): the spine demo ran clean 3× consecutively on
+`dev-local`. `make seed` before each run — the override is sticky, so round 2 starts
+with an empty clinic otherwise.
 
 ## Run it
 
@@ -94,12 +94,15 @@ second-guessed:
   reduce mean waiting time (23.1 vs 22.7 min — marginally worse); it changes *who* waits.
   In a busy department it is 71.8 vs 147.8 min. The claim is **"the right people wait
   less"**, never "everyone waits less".
+- **The PWA has no queue-position screen.** `/api/v1/me/queue` serves position and
+  predicted wait, `demo-check` asserts on it, the i18n strings exist — nothing renders
+  them. What a patient actually sees after a reschedule is the notification.
 - **"surge" scenario not built** — five scenarios shipped.
 - Kiosk skin (§9c), IVR, Bhashini, beds, referrals, blood, Prophet, Golden Hour: all
   Phase 2, untouched.
 
 ## Next
 
-1. Run the Phase 1 exit criteria — spine demo clean 3× in a row.
-2. Re-verify `make dev` (compose) since it is the only unverified path.
-3. Then Phase 2, top of the list in `docs/PLAN.md`.
+1. Re-verify `make dev` (compose) — the only unverified path, and **mandatory before
+   Phase 2** by the owner's decision.
+2. Then Phase 2, top of the list in `docs/PLAN.md`.

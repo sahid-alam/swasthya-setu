@@ -51,6 +51,10 @@ Order matters: presence → optimizer → one channel → dashboard, then widen.
   **Not PouchDB**: localStorage + REST replay, ARCHITECTURE D23 supersedes D6.
   Patient phone-OTP login now exists (`/patient`) — reuses the mock SMS adapter and the
   existing JWT, no new auth service. Staff/kiosk operation still works unchanged.
+  **Queue position is API-only.** `/api/v1/me/queue` and `/api/v1/pwa/my-queue/{id}`
+  serve position + predicted wait and `demo-check` asserts on them, but no PWA screen
+  renders it (the `myQueue` / `positionLabel` strings sit unused in `lib/i18n.ts`).
+  The patient's visible proof of a reschedule is the notification, not a screen.
 - [x] WhatsApp adapter (mock mode default) with guided flow
 - [x] SMS adapter (mock mode default): confirmations + reschedule notices
 - [x] Notification service consuming reschedule events → channel fan-out with delivery log
@@ -67,6 +71,10 @@ Order matters: presence → optimizer → one channel → dashboard, then widen.
   arrives / walk to surgery / beacon dies / calls in sick / roster is wrong
 
 **Exit (the spine demo):** doctor marked absent via simulator → dashboard flips → 40 appointments re-optimized <5s → mock WhatsApp/SMS log shows notifications → patient PWA shows new slot. Runs clean 3× in a row.
+**MET 2026-08-20** on `dev-local`, via `make seed && make demo-check` three times
+consecutively: 8/8 each run, `OPTIMAL` in 156 / 196 / 164 ms, 39 patients moved (the
+seed books 39, not 40), 39–41 WhatsApp/SMS outbox rows per run. The last hop is checked
+through the PWA's own queue endpoint, not a rendered screen — see 1C below.
 
 ## Phase 2 — Tier 2 (target: ~4 weeks part-time)
 
@@ -386,3 +394,51 @@ every target up front, or verify each substitution landed afterwards.
 
 **Next session:** Phase 1 exit criteria — run the full spine demo three times clean, then
 Phase 2. Consider re-verifying compose first since it is the only untested path.
+
+### 2026-08-20 (later still — Phase 1 exit, runbook for the 21 Aug demo)
+
+**Phase 1 exit criteria met.** `make seed && make demo-check` three times consecutively
+on `dev-local`, 8/8 every run: `OPTIMAL` in 156 / 196 / 164 ms, 39 patients moved,
+39–41 WhatsApp/SMS outbox rows (the SMS ones are WhatsApp failures falling back). The
+re-seed between rounds is not optional — the override is sticky, so round 2 would start
+against an empty clinic.
+
+**demo-check went 7/7 → 8/8**, because two of the five hops in the exit criterion were
+not actually being checked:
+
+- the notification assertion was a bare `count(*)`, which any booking confirmation would
+  satisfy; it is now scoped to the reschedule templates on WHATSAPP/SMS and compared
+  against the number of patients who were holding appointments.
+- "patient PWA shows new slot" was not checked at all. It now captures a real patient of
+  HP-DOC-1001 before the replan and asserts the patient app is served her new slot
+  afterwards. First version failed three runs straight: a move writes a **new**
+  appointment row and marks the old one `RESCHEDULED`, so the old id is gone from the
+  queue. Following `rescheduled_from` was the fix — the spine was fine, the assertion
+  was wrong.
+
+**Found while writing the runbook: the PWA has no queue-position screen.** The endpoints
+exist (`/me/queue`, `/pwa/my-queue/{id}`), the i18n strings exist, nothing renders them.
+Not built tonight — it is `frontend/` work needing DESIGN.md §9b, on the eve of a demo.
+Noted in 1C, in HANDOFF gaps and in the runbook, which tells the presenter to show the
+notification instead. That is the honest artefact anyway: real Hindi naming the
+replacement doctor and the new token.
+
+**`infra/demo-script.md` rewritten** for 1C/1D/OTP. It described the M1 presence layer
+and still carried a "not built yet" section listing appointments, CP-SAT, patient
+channels and the network map — all shipped — which would have had the presenter
+disclaiming working features. Now four parts (presence → allocation → access → command
+centre), 19 steps, with a route table, the staff-token snippet the old file used but
+never defined, and the pre-stage ritual (`make seed && make demo-check`, 8/8 or don't
+start). Every command in it was executed against the running stack this session: OTP
+request → code out of the outbox → verify → `/me/queue`, the three-turn WhatsApp flow
+(booked token 32), the alerts payload, and the Vite dev proxy — `PatientLogin` fetches
+`/api/v1/...` relative, so patient login could have been broken in the browser while
+every curl passed. It forwards.
+
+**Housekeeping:** HEAD was already two commits past what HANDOFF records (`d656c79`, not
+`e4e6a01`). The PRD PouchDB→CouchDB line was hand-edited by the owner and is committed
+separately. Compose (`make dev`) is still unverified and is now the mandatory first item
+before Phase 2.
+
+**Next session:** re-verify `make dev` on compose, then Phase 2 from the top —
+IVR adapter (Exotel, mock telephony).
