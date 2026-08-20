@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Button, Chip, Eyebrow, Panel } from "../components/ui";
-import { api, getToken } from "../lib/api";
+import { api, getToken, isPatient } from "../lib/api";
 import { formatWhen, getLang, setLang, t, type Lang } from "../lib/i18n";
 import { enqueue, flush, pending, type Intent } from "../lib/outbox";
 
@@ -51,7 +51,8 @@ export default function Book() {
 
   useEffect(() => {
     api<{ departments: Dept[]; patient: { id: string; name: string } }>(
-      "/pwa/context",
+      // a patient token scopes to its holder; the staff/kiosk path takes an id
+      isPatient() ? "/me/context" : "/pwa/context",
     )
       .then((ctx) => {
         setDepts(ctx.departments);
@@ -64,7 +65,9 @@ export default function Book() {
 
   useEffect(() => {
     if (!dept) return;
-    api<Offer[]>(`/booking/slots?department_id=${dept}&limit=12`)
+    api<Offer[]>(
+      `${isPatient() ? "/me/slots" : "/booking/slots"}?department_id=${dept}&limit=12`,
+    )
       .then(setOffers)
       .catch(() => setOffers([]));
   }, [dept]);
@@ -78,7 +81,7 @@ export default function Book() {
 
   async function sync() {
     const { rejected } = await flush((i) =>
-      fetch("/api/v1/booking", {
+      fetch(isPatient() ? "/api/v1/me/booking" : "/api/v1/booking", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -117,10 +120,13 @@ export default function Book() {
       return;
     }
     try {
-      const booked = await api<Booked>("/booking", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      const booked = await api<Booked>(
+        isPatient() ? "/me/booking" : "/booking",
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        },
+      );
       setDone(booked);
     } catch {
       // treat any failure as offline-ish: keep the intent rather than lose it

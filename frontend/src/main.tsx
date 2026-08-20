@@ -14,6 +14,7 @@ import Scenarios from "./routes/Scenarios";
 import PresenceBoard from "./routes/PresenceBoard";
 import DevUI from "./routes/DevUI";
 import Login from "./routes/Login";
+import PatientLogin from "./routes/PatientLogin";
 import "./styles/tokens.css";
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
@@ -26,6 +27,7 @@ createRoot(document.getElementById("root")!).render(
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/patient" element={<PatientLogin />} />
           <Route
             element={
               <RequireAuth>

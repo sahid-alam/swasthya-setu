@@ -71,9 +71,10 @@ async def _fan_out(
     patient: Patient,
     template: str,
     params: dict,
+    channels: list[Channel] | None = None,
 ) -> list[Notification]:
     written: list[Notification] = []
-    for channel in CHANNEL_ORDER:
+    for channel in channels or CHANNEL_ORDER:
         adapter = messaging(channel)
         try:
             result = await adapter.send(to=patient.phone, template=template, params=params)
@@ -104,6 +105,27 @@ async def _fan_out(
 
     await db.flush()
     return written
+
+
+async def send_raw(
+    db: AsyncSession,
+    *,
+    patient: Patient,
+    template: str,
+    params: dict,
+    channels: list[Channel] | None = None,
+) -> list[Notification]:
+    """A message not tied to an appointment (an OTP, say). Same fan-out, same outbox —
+    an auth code that bypassed the delivery log would be the one message nobody could
+    audit."""
+    return await _fan_out(
+        db,
+        None,
+        patient,
+        template,
+        {**params, "language": patient.preferred_language.value},
+        channels=channels,
+    )
 
 
 async def notify_replan(db: AsyncSession, result) -> int:

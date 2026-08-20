@@ -46,6 +46,15 @@ def current_user(token: str | None = Depends(oauth2)) -> dict:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid token") from exc
 
 
+def current_patient_id(user: dict = Depends(current_user)) -> str:
+    """A PATIENT token carries the patient id in `sub`. Any endpoint serving patient
+    data must scope to this rather than trusting an id in the URL — otherwise the
+    token is a key to everyone's records, not the holder's."""
+    if user.get("role") != UserRole.PATIENT.value:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "patient token required")
+    return user["sub"]
+
+
 def require_roles(*roles: UserRole):
     """Route dependency: `Depends(require_roles(UserRole.ADMIN))`."""
     allowed = {r.value for r in roles}

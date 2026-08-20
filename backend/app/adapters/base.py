@@ -66,6 +66,10 @@ def render(template: str, params: dict, language: str = "EN") -> str:
             ),
             "cancelled": "Swasthya-Setu: your appointment on {when} has been cancelled.",
             "reminder": "Swasthya-Setu: reminder — {doctor} at {hospital}, {when}. Token {token}.",
+            "otp": (
+                "Swasthya-Setu: your login code is {code}. It expires in {minutes} "
+                "minutes. Never share it with anyone."
+            ),
         },
         "HI": {
             "booked": (
@@ -82,6 +86,10 @@ def render(template: str, params: dict, language: str = "EN") -> str:
             ),
             "cancelled": "स्वास्थ्य-सेतु: {when} का आपका अपॉइंटमेंट रद्द कर दिया गया है।",
             "reminder": "स्वास्थ्य-सेतु: याद दिलाने के लिए — {hospital} में {doctor}, {when}। टोकन {token}।",
+            "otp": (
+                "स्वास्थ्य-सेतु: आपका लॉगिन कोड {code} है। यह {minutes} मिनट में समाप्त हो जाएगा। "
+                "इसे किसी के साथ साझा न करें।"
+            ),
         },
     }
     table = bodies.get(language.upper(), bodies["EN"])

@@ -33,6 +33,20 @@ export async function login(phone: string, password: string) {
   return out;
 }
 
+/** Role carried by the current token. Patients get their own endpoints, which scope
+ *  to the token holder rather than trusting an id in the URL. */
+export function tokenRole(): string | null {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    return JSON.parse(atob(token.split(".")[1])).role ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export const isPatient = () => tokenRole() === "PATIENT";
+
 /** Dashboard event stream. Token rides the query string — WebSockets take no headers.
  *  The endpoint also filters on hospital_id; 1D passes it once there is a switcher. */
 export function dashboardSocket(): WebSocket {

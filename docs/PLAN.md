@@ -49,7 +49,8 @@ Order matters: presence → optimizer → one channel → dashboard, then widen.
 - [x] PWA booking flow (Hindi + English), queue position view, offline queue + sync —
   offline path verified in a browser (book offline → queue → reconnect → drains to 0).
   **Not PouchDB**: localStorage + REST replay, ARCHITECTURE D23 supersedes D6.
-  *Patient self-service auth (phone OTP) is NOT built — this app is staff/kiosk operated.*
+  Patient phone-OTP login now exists (`/patient`) — reuses the mock SMS adapter and the
+  existing JWT, no new auth service. Staff/kiosk operation still works unchanged.
 - [x] WhatsApp adapter (mock mode default) with guided flow
 - [x] SMS adapter (mock mode default): confirmations + reschedule notices
 - [x] Notification service consuming reschedule events → channel fan-out with delivery log

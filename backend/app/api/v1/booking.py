@@ -27,7 +27,7 @@ from app.models import (
     User,
     UserRole,
 )
-from app.security import require_roles
+from app.security import current_patient_id, require_roles
 from app.services import booking, notify
 
 router = APIRouter(tags=["booking"])
@@ -351,3 +351,73 @@ async def my_queue(
             )
         )
     return out
+
+
+# --- patient-scoped endpoints --------------------------------------------------
+# These take the patient id from the token, never from the URL. A patient token that
+# accepted an id in the path would be a key to everyone's records.
+
+
+@router.get("/me/context", response_model=PwaContext)
+async def my_context(
+    db: AsyncSession = Depends(get_db), patient_id: str = Depends(current_patient_id)
+) -> PwaContext:
+    from app.models import Department as Dept
+
+    rows = (
+        await db.execute(
+            select(Dept, Hospital).join(Hospital, Hospital.id == Dept.hospital_id).limit(40)
+        )
+    ).all()
+    patient = (
+        await db.execute(select(Patient).where(Patient.id == uuid.UUID(patient_id)))
+    ).scalar_one()
+    return PwaContext(
+        departments=[PwaDept(id=str(d.id), name=d.name, hospital=h.name) for d, h in rows],
+        patient=PwaPatient(
+            id=str(patient.id), name=patient.name, language=patient.preferred_language.value
+        ),
+    )
+
+
+@router.get("/me/queue", response_model=list[MyQueueOut])
+async def my_own_queue(
+    db: AsyncSession = Depends(get_db), patient_id: str = Depends(current_patient_id)
+) -> list[MyQueueOut]:
+    return await my_queue(uuid.UUID(patient_id), db, None)
+
+
+class MyBookIn(BaseModel):
+    slot_id: uuid.UUID
+    channel: Channel = Channel.PWA
+
+
+@router.post("/me/booking", response_model=AppointmentOut, status_code=status.HTTP_201_CREATED)
+async def book_for_myself(
+    body: MyBookIn,
+    db: AsyncSession = Depends(get_db),
+    patient_id: str = Depends(current_patient_id),
+) -> AppointmentOut:
+    try:
+        appt = await booking.book(
+            db,
+            patient_id=uuid.UUID(patient_id),
+            slot_id=body.slot_id,
+            channel=body.channel,
+        )
+    except booking.BookingError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await notify.notify_appointment(db, appt.id, "booked")
+    await db.commit()
+    return await _describe(db, appt.id)
+
+
+@router.get("/me/slots", response_model=list[OfferOut])
+async def my_slot_search(
+    department_id: uuid.UUID,
+    days: int = Query(7, ge=1, le=30),
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(current_patient_id),
+) -> list[OfferOut]:
+    return await search(department_id, days, limit, db, None)

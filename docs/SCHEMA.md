@@ -54,6 +54,8 @@ queue:{department_id}           list of appointment ids (live order)
 ws:dash:{hospital_id}           pub/sub relay channels
 lock:replan:{doctor_id}         SET NX EX 30 — dedupe replan triggers
 chat:whatsapp:{phone10}         guided booking conversation state         TTL 30 min
+otp:code:{phone10}              login code + patient id + attempt count   TTL 5 min
+otp:rate:{phone10}              OTP requests in the window                TTL 15 min
 cache:slots:{dept}:{date}       json, TTL 60s, busted on replan
 ```
 
