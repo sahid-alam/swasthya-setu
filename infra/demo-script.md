@@ -113,6 +113,67 @@ backend/.venv/bin/python simulators/face_mock.py HP-DOC-1001                  # 
 > "Check-in is voluntary. Only doctors who enrolled are matchable, we store the
 > embedding and never an image, and the public API never serves embeddings back."
 
+## Part 2 — allocation (M2)
+
+Presence is only worth building if something acts on it. This is that something.
+
+### 8. A doctor calls in sick at 9 AM with 40 booked patients — *PRD M2 accept #1* (60s)
+
+Show the clinic list first:
+
+```bash
+curl -s localhost:8000/api/v1/scheduling/clinic -H "Authorization: Bearer $TOK" \
+  | python3 -m json.tool | head -20
+```
+
+Then make the call:
+
+```bash
+backend/.venv/bin/python simulators/scenario.py doctor_absent HP-DOC-1001
+```
+
+> "Nobody clicked 'reschedule'. The presence change *is* the trigger. Forty patients
+> were re-seated across his colleagues in about three hundred milliseconds, and the
+> plan and the presence board can't disagree because they committed together."
+
+Then show the receipt:
+
+```bash
+curl -s "localhost:8000/api/v1/scheduling/plan-runs?limit=1" -H "Authorization: Bearer $TOK"
+```
+
+`solver_status: OPTIMAL`, `duration_ms`, `moved_count`. Every solve this system has ever
+run is in that table — that is the "<5 seconds" claim with evidence, not a slide.
+
+### 9. "How do you know the predictions are any good?" — *PRD M2 accept #2* (40s)
+
+```bash
+curl -s localhost:8000/api/v1/metrics/models -H "Authorization: Bearer $TOK"
+```
+
+> "No-show is trained on the real public 110,527-appointment dataset. ROC-AUC 0.735,
+> Brier 0.143 against a 0.161 base rate. That is a real number, not a good one — anyone
+> showing you 0.95 on this dataset is leaking a feature.
+> The wait-time model has no real dataset to train on, so it is trained on simulated
+> clinic days and the API says SYNTHETIC in the response. It beats the arithmetic your
+> reception desk already does — 15 minutes of error against 27."
+
+### 10. "Why CP-SAT and not first-come-first-served?" — *PRD M2 accept #3* (60s)
+
+```bash
+cat ml/artifacts/fcfs_comparison.json | python3 -m json.tool
+```
+
+**Say this honestly, it is the strongest thing in the deck:**
+
+> "When there is spare capacity, our optimiser does *not* make people wait less. Mean
+> displacement is 23 minutes against FCFS's 22 — we are marginally worse. What changes
+> is *who* waits: a referred patient waits zero minutes instead of twenty-five.
+> When the department is genuinely busy — which is every real day in Himachal — mean
+> displacement is 72 minutes against 148, and first-come-first-served ends up turning
+> away referred patients entirely because it never looks at why they were referred.
+> The claim is that the right people wait less. Not that everyone does."
+
 ## Optional: a whole day in two minutes
 
 ```bash
