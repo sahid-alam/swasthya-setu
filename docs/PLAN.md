@@ -100,6 +100,18 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
   cold OTP delivery — an approved authentication template. Mock stays the default.
   Inbound over real WhatsApp is deliberately not built: it needs a public webhook with
   Meta's signature check, and nobody asked for it.
+- [~] **Vapi voice agent** (owner decision 2026-08-21) — backend done, assistant blocked.
+  `POST /channels/vapi/tools` takes Vapi's tool-call envelope (`adapters/vapi.py` is the
+  only code that knows its shape), authenticated by a shared secret header because Vapi
+  cannot hold our JWT, and closed with a 503 when `VAPI_TOOL_SECRET` is unset. Three
+  tools — `find_patient`, `find_slots`, `book_slot` — booking through the same
+  `services/booking.py` as every other channel. Verified end-to-end with
+  `simulators/vapi_call.py`, which posts the same envelope with no internet: books with
+  `channel=VOICE` and lands a receipt in the outbox. **Blocked on two things**: the key
+  in `.env` is Vapi's *public* key, and creating the assistant needs the *private* one;
+  and the tools need `PUBLIC_BASE_URL` — a deployment — before Vapi's servers can reach
+  them. `infra/vapi_setup.py` creates/updates the assistant idempotently the moment
+  both exist. Dashboard call button still to build (needs the public key at build time).
 - [ ] Bhashini voice booking (constrained intent flow, mock mode + sandbox)
 - [ ] Outbound TTS reschedule calls (mock mode)
 - [ ] Kiosk mode skin for PWA

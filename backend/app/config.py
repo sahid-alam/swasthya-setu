@@ -1,10 +1,14 @@
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Both, later wins: the repo-root .env is the one a human edits, and `backend/.env`
+    # stays available for a machine-specific override. Without the first, running
+    # uvicorn from backend/ silently ignores the file the README tells you to fill in.
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
 
     database_url: str = "postgresql+asyncpg://setu:setu@localhost:5432/swasthya"
     redis_url: str = "redis://localhost:6379/0"
@@ -42,6 +46,29 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = ""
     smtp_timeout_seconds: int = 10
+
+    # Vapi voice agent. The private key is server-side (creating assistants, and the
+    # only one that can spend money); the public key is the browser's and is safe in
+    # the bundle. Alias list because the key was set before this name existed.
+    vapi_private_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "VAPI_PRIVATE_KEY",
+            "VAPI_API",
+            "VAPI_API_KEY",
+            "VAPI_KEY",
+            "VAPI_TOKEN",
+            "vapi_private_key",
+        ),
+    )
+    vapi_public_key: str = ""
+    vapi_assistant_id: str = ""  # written by infra/vapi_setup.py, then set here
+    # Vapi calls our tools from its own servers, so this must be reachable from the
+    # internet. Empty means the assistant is created without server tools — it can
+    # talk, it just cannot book (Iron Rule 4: the IVR path still books with no internet).
+    public_base_url: str = ""
+    # Vapi sends this on every tool call; without it the endpoint refuses to be wired.
+    vapi_tool_secret: str = ""
 
     # The demo needs one patient whose address you can actually receive mail at.
     # Applied by `make seed` to the first seeded patient; empty leaves every patient

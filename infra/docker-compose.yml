@@ -30,6 +30,12 @@ services:
              pip install -q uv && uv sync --frozen &&
              .venv/bin/alembic upgrade head &&
              .venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+    # The repo-root .env, if it exists — this is how credentials reach the container.
+    # `environment:` below still wins, which is what keeps DATABASE_URL pointing at the
+    # postgres service rather than at the host address a developer put in .env.
+    env_file:
+      - path: ../.env
+        required: false
     environment:
       DATABASE_URL: postgresql+asyncpg://setu:setu@postgres:5432/swasthya
       REDIS_URL: redis://redis:6379/0

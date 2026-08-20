@@ -5,9 +5,10 @@ ours either way, so the vendor shape is translated at the adapter boundary and t
 router only speaks our domain. The flow calls the same booking service the PWA does.
 """
 
+import hmac
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import events
 from app.adapters.base import AdapterError, CallTurn
 from app.adapters.factory import telephony
+from app.adapters.vapi import ToolCall, parse_tool_calls, tool_results
 from app.adapters.whatsapp_mock import MENU, parse_reply
+from app.config import get_settings
 from app.db import get_db
 from app.models import Channel, Department, Doctor, Hospital, Patient, Slot, User, UserRole
 from app.security import require_roles
@@ -426,3 +429,130 @@ async def _ivr_turn(db: AsyncSession, turn: CallTurn, session: dict) -> VoiceRep
     session["state"] = "menu"
     session["say"] = _say(lang, "menu")
     return again()
+
+
+# ------------------------------------------------- Vapi voice agent (PRD §M3, Tier 2)
+#
+# Vapi runs the speech and calls these tools from its own servers. The tools do exactly
+# what the IVR keypad does, through the same booking service — a voice agent is a third
+# way to collect the arguments, not a third set of rules. `simulators/vapi_call.py`
+# posts the same envelope with no internet, which is what keeps this demoable offline.
+
+VOICE_TTL_SECONDS = 15 * 60
+VOICE_MAX_OPTIONS = 3
+
+
+def _voice_key(call_id: str) -> str:
+    return f"chat:vapi:{call_id}"
+
+
+async def load_voice(call_id: str) -> dict:
+    return await events.get_json(_voice_key(call_id)) or {}
+
+
+async def save_voice(call_id: str, session: dict) -> None:
+    await events.set_json(_voice_key(call_id), session, VOICE_TTL_SECONDS)
+
+
+class ToolResultsOut(BaseModel):
+    results: list[dict]
+
+
+@router.post("/vapi/tools", response_model=ToolResultsOut)
+async def vapi_tools(
+    payload: dict,
+    x_setu_tool_secret: str = Header(default=""),
+    db: AsyncSession = Depends(get_db),
+) -> ToolResultsOut:
+    """One batch of tool calls from a voice conversation.
+
+    Not staff-authenticated: Vapi cannot hold our JWT. It is authenticated by a shared
+    secret it sends as a header, and with no secret configured the endpoint refuses to
+    exist rather than standing open on a public URL.
+    """
+    secret = get_settings().vapi_tool_secret
+    if not secret:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "voice tools are not configured")
+    if not hmac.compare_digest(x_setu_tool_secret, secret):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bad tool secret")
+
+    try:
+        call_id, calls = parse_tool_calls(payload)
+    except AdapterError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    session = await load_voice(call_id)
+    results = []
+    for call in calls:
+        results.append((call.id, await _voice_tool(db, call, session)))
+    await save_voice(call_id, session)
+    await db.commit()
+    return ToolResultsOut(**tool_results(results))
+
+
+async def _voice_tool(db: AsyncSession, call: ToolCall, session: dict) -> str:
+    """Every branch returns a sentence, because the result is read aloud verbatim."""
+    args = call.arguments
+
+    if call.name == "find_patient":
+        patient = await _patient_for(db, str(args.get("phone", "")))
+        if patient is None:
+            return (
+                "That number is not on file. Ask them to visit the hospital reception "
+                "once to register, then try again."
+            )
+        session["patient_id"] = str(patient.id)
+        session["patient_name"] = patient.name
+        return f"Found {patient.name}. Ask which department they need."
+
+    if call.name == "find_slots":
+        wanted = str(args.get("department", "")).strip().lower()
+        rows = (
+            await db.execute(
+                select(Department, Hospital).join(Hospital, Hospital.id == Department.hospital_id)
+            )
+        ).all()
+        match = next((d for d, _ in rows if wanted and wanted in d.name.lower()), None)
+        if match is None:
+            names = ", ".join(sorted({d.name for d, _ in rows})[:6])
+            return f"No department by that name. The ones we have are: {names}."
+
+        offers = await booking.search_slots(db, department_id=match.id, limit=VOICE_MAX_OPTIONS)
+        if not offers:
+            return f"There is nothing open in {match.name} this week."
+        session["slots"] = [str(o.slot_id) for o in offers]
+        listing = "; ".join(
+            f"option {i + 1}, {o.starts_at:%d %B at %H:%M} with {o.doctor_name}"
+            for i, o in enumerate(offers)
+        )
+        return f"{match.name} has {listing}. Ask which option they want."
+
+    if call.name == "book_slot":
+        if not session.get("patient_id"):
+            return "Nobody is identified yet. Ask for their phone number first."
+        slots = session.get("slots") or []
+        try:
+            choice = int(args.get("option", 0))
+        except (TypeError, ValueError):
+            choice = 0
+        if not 1 <= choice <= len(slots):
+            return f"That is not one of the options. There are {len(slots)}."
+
+        try:
+            appt = await booking.book(
+                db,
+                patient_id=uuid.UUID(session["patient_id"]),
+                slot_id=uuid.UUID(slots[choice - 1]),
+                channel=Channel.VOICE,
+            )
+        except booking.BookingError as exc:
+            return f"That did not go through: {exc}. Offer another option."
+
+        await notify.notify_appointment(db, appt.id, "booked")
+        session.pop("slots", None)
+        return (
+            f"Booked. Token number {appt.token_number}. "
+            "Tell them a confirmation message is on its way."
+        )
+
+    return f"There is no tool called {call.name}."
