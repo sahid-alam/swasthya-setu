@@ -48,6 +48,18 @@ async def main():
     )
     report("clinic list seeded", before["booked"] > 0, f"{before['booked']} waiting")
 
+    # One real patient of his, captured before the replan, so the last hop of the
+    # exit criterion ("patient PWA shows new slot") is checked against a patient who
+    # actually held one of these appointments — not against whatever the API returns.
+    victim = psql(
+        "select a.patient_id, a.id, u.name from appointments a "
+        "join slots s on s.id = a.slot_id "
+        "join doctors d on d.id = s.doctor_id "
+        "join users u on u.id = d.user_id "
+        "where d.badge_id = 'HP-DOC-1001' and a.status = 'BOOKED' "
+        "and s.starts_at >= now() order by s.starts_at limit 1"
+    ).split("|")
+
     topics = []
     async with websockets.connect(
         f"ws://localhost:8000/ws/dashboard?token={tok}"
@@ -80,11 +92,20 @@ async def main():
         ),
     )
 
-    notes = psql("select count(*) from notifications")
+    # Scoped to the reschedule templates and to the two messaging channels: a bare
+    # count(*) would pass on booking confirmations alone. `make seed` truncates the
+    # table, so these rows are this run's.
+    breakdown = psql(
+        "select channel || ' ' || count(*) from notifications "
+        "where template in ('rescheduled', 'reschedule_pending') "
+        "and channel in ('WHATSAPP', 'SMS') group by channel"
+    )
+    sent = sum(int(line.split()[1]) for line in breakdown.splitlines() if line)
     report(
-        "notifications rows for affected patients",
-        int(notes or 0) > 0,
-        f"{notes} rows (notification service is Phase 1C)",
+        "mock WhatsApp/SMS outbox told every moved patient",
+        sent >= before["booked"],
+        f"{sent} rows for {before['booked']} patients"
+        f" ({breakdown.replace(chr(10), ', ') or 'none'})",
     )
 
     report(
@@ -100,6 +121,32 @@ async def main():
     )
     report(
         "absent doctor holds nobody", after["booked"] == 0, f"{after['booked']} waiting"
+    )
+
+    # The last hop: what the patient app serves that patient now. Either she has been
+    # moved to another doctor, or she is RESCHEDULE_PENDING — both are honest, and the
+    # PWA renders both. Failing means she vanished from her own queue, or is still
+    # being shown a doctor who is on leave. A move writes a NEW appointment row and
+    # leaves the old one RESCHEDULED, so follow `rescheduled_from` rather than
+    # expecting the old id to survive.
+    pid, appt_id, absent_name = victim
+    successor = psql(
+        f"select id from appointments where rescheduled_from = '{appt_id}'"
+    )
+    mine = a.http.get(f"/api/v1/pwa/my-queue/{pid}").json()
+    entry = next((m for m in mine if m["appointment_id"] in (successor, appt_id)), None)
+    report(
+        "patient PWA shows the new slot (or a labelled pending one)",
+        entry is not None
+        and (
+            entry["doctor_name"] != absent_name
+            or entry["status"] == "RESCHEDULE_PENDING"
+        ),
+        (
+            f"{entry['status']} with {entry['doctor_name']} at {entry['scheduled_for'][11:16]}"
+            if entry
+            else "gone from her own queue"
+        ),
     )
 
     # Phase 2 modules do not exist yet — nothing to check (step 3 N/A)
