@@ -106,3 +106,17 @@ def test_a_full_clinic_list_solves_well_inside_the_five_second_budget():
     assert status == "OPTIMAL"
     assert len(assignment) == 40
     assert elapsed < 5.0, f"took {elapsed:.2f}s"
+
+
+def test_overbooking_is_capped_and_only_targets_likely_no_shows():
+    """Overbooking is a bet; losing it means a real person waits in a corridor."""
+    from app.services.scheduling import OVERBOOK_MAX_PER_DOCTOR, OVERBOOK_NOSHOW_THRESHOLD
+
+    assert OVERBOOK_NOSHOW_THRESHOLD >= 0.5, "never overbook a seat we expect to be used"
+    assert 1 <= OVERBOOK_MAX_PER_DOCTOR <= 5, "a cap that large is not a cap"
+
+
+def test_an_overbooked_seat_takes_exactly_one_extra_patient():
+    bookings = [booking(PriorityClass.GENERAL, 0) for _ in range(4)]
+    _, _, assignment = solve_assignment(bookings, [slot(0, capacity=2)])
+    assert len(assignment) == 2

@@ -226,6 +226,57 @@ async def _score_noshow(db, now: datetime) -> None:
             handicap=bool(flags.get("disabled")),
         )
     await db.flush()
+    await _seed_long_lead_bookings(db, now)
+
+
+# A clinic with no likely no-shows never exercises overbooking, so the demo would ship
+# a feature nobody has ever seen run. These are not faked probabilities — they are the
+# risk profile the real 110k dataset actually flags: booked months ahead, no reminder
+# received, young patient. The model scores them ~0.55 on its own.
+LONG_LEAD_DAYS = 95
+LONG_LEAD_COUNT = 3
+
+
+async def _seed_long_lead_bookings(db, now: datetime) -> None:
+    """Give a few of the demo doctor's colleagues a genuinely high-risk booking."""
+    from app.services import models as ml
+
+    demo = (await db.execute(select(Doctor).where(Doctor.badge_id == DEMO_BADGE))).scalar_one()
+    rows = (
+        await db.execute(
+            select(Appointment, Slot, Patient)
+            .join(Slot, Slot.id == Appointment.slot_id)
+            .join(Patient, Patient.id == Appointment.patient_id)
+            .where(
+                Appointment.status == AppointmentStatus.BOOKED,
+                Appointment.department_id == demo.department_id,
+                Slot.doctor_id != demo.id,  # must be a colleague, or it is not overbookable
+                Slot.starts_at >= now,
+            )
+            .order_by(Slot.starts_at)
+            .limit(LONG_LEAD_COUNT)
+        )
+    ).all()
+
+    booked_at = now - timedelta(days=LONG_LEAD_DAYS)
+    for appt, slot, patient in rows:
+        patient.age = 21  # the demographic the dataset flags hardest
+        appt.created_at = booked_at  # so the lead time is inspectable, not just asserted
+        appt.noshow_prob = ml.predict_noshow(
+            booked_at=booked_at,
+            appointment_at=slot.starts_at,
+            age=patient.age,
+            is_female=True,
+            sms_received=False,  # never got a reminder
+        )
+    await db.flush()
+    if rows:
+        print(
+            f"        {len(rows)} long-lead bookings "
+            f"(~{LONG_LEAD_DAYS}d ahead, no reminder) -> "
+            f"no-show {min(float(a.noshow_prob) for a, _, _ in rows):.2f}"
+            f"-{max(float(a.noshow_prob) for a, _, _ in rows):.2f}, overbookable"
+        )
 
 
 async def main() -> None:

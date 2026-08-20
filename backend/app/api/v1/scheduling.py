@@ -172,6 +172,46 @@ class ClinicRow(BaseModel):
     unavailable_reason: str | None = None
 
 
+class PendingOut(BaseModel):
+    appointment_id: str
+    patient_name: str
+    patient_phone: str
+    department: str
+    was_scheduled_for: datetime
+    priority: PriorityClass
+
+
+@router.get("/scheduling/pending", response_model=list[PendingOut])
+async def reschedule_pending(
+    db: AsyncSession = Depends(get_db), _=Depends(STAFF)
+) -> list[PendingOut]:
+    """Patients a replan could not seat. This list existing is the point — they are
+    owed an appointment, and somebody has to be able to see that."""
+    from app.models import Department
+
+    rows = (
+        await db.execute(
+            select(Appointment, Slot, Patient, Department)
+            .join(Slot, Slot.id == Appointment.slot_id)
+            .join(Patient, Patient.id == Appointment.patient_id)
+            .join(Department, Department.id == Appointment.department_id)
+            .where(Appointment.status == AppointmentStatus.RESCHEDULE_PENDING)
+            .order_by(Appointment.priority_class, Slot.starts_at)
+        )
+    ).all()
+    return [
+        PendingOut(
+            appointment_id=str(appt.id),
+            patient_name=patient.name,
+            patient_phone=patient.phone,
+            department=dept.name,
+            was_scheduled_for=slot.starts_at,
+            priority=appt.priority_class,
+        )
+        for appt, slot, patient, dept in rows
+    ]
+
+
 @router.get("/scheduling/clinic", response_model=list[ClinicRow])
 async def clinic(
     hospital_id: uuid.UUID | None = None,

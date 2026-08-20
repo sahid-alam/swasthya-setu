@@ -307,7 +307,9 @@ async def _apply(
         si = assignment.get(ai)
         booking.slot.status = SlotStatus.OPEN  # the absent doctor's seat frees up
         if si is None:
-            appt.status = AppointmentStatus.CANCELLED
+            # Still owed an appointment. Cancelling would mean the patient finds out
+            # by turning up; PENDING keeps them on someone's screen until 1C tells them.
+            appt.status = AppointmentStatus.RESCHEDULE_PENDING
             continue
 
         target = slots[si]

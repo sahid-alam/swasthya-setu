@@ -125,6 +125,9 @@ class AppointmentStatus(StrEnum):
     NO_SHOW = "NO_SHOW"
     CANCELLED = "CANCELLED"
     RESCHEDULED = "RESCHEDULED"
+    # A replan could not find this patient a seat. They are still owed an appointment —
+    # cancelling them silently would mean they find out by turning up to an empty clinic.
+    RESCHEDULE_PENDING = "RESCHEDULE_PENDING"
 
 
 class QueueState(StrEnum):
