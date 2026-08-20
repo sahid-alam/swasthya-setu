@@ -61,7 +61,7 @@ Signals (all via simulators; hardware optional): BLE beacon sightings, RFID gate
 
 Single booking API consumed by all channels; channels are thin adapters.
 
-- **PWA:** Hindi + English, offline-capable (PouchDB→CouchDB sync), booking + queue position + reschedule.
+- **PWA:** Hindi + English, offline-capable (offline outbox + sync), booking + queue position + reschedule.
 - **WhatsApp** (Meta Cloud API adapter): guided booking flow, confirmations, reschedule links.
 - **SMS** (MSG91 adapter): confirmations, reschedule notices, structured keyword booking.
 - **IVR** (Exotel adapter): DTMF booking for feature phones.
