@@ -57,10 +57,13 @@ Order matters: presence → optimizer → one channel → dashboard, then widen.
 ### 1D. Command center
 - [x] Presence board (live, per hospital/department) — brought forward from 1D for the
   20 Aug presentation; includes the evidence drawer ("how do you know?")
-- [ ] Queue view with predicted waits
-- [ ] Alerts: roster-vs-presence mismatch, queue overflow
-- [ ] Network map (Leaflet) with facility status
-- [ ] Scenario triggers panel (admin-only): "doctor absent", "surge" — drives simulators
+- [x] Queue view with predicted waits
+- [x] Alerts: roster-vs-presence mismatch, queue overflow (+ patients pending rebooking)
+- [x] Network map (Leaflet) with facility status — *basemap tiles need internet; their
+  absence is detected and labelled, markers and every number still render (Iron Rule 4)*
+- [x] Scenario triggers panel (admin-only) — drives the same public `/signals` endpoint
+  the CLI simulators use, from the browser. "surge" not built; the five shipped are
+  arrives / walk to surgery / beacon dies / calls in sick / roster is wrong
 
 **Exit (the spine demo):** doctor marked absent via simulator → dashboard flips → 40 appointments re-optimized <5s → mock WhatsApp/SMS log shows notifications → patient PWA shows new slot. Runs clean 3× in a row.
 

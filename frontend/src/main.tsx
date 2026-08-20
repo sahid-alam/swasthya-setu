@@ -5,7 +5,12 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { getToken } from "./lib/api";
 import Dashboard from "./routes/Dashboard";
+import Shell from "./components/Shell";
+import Alerts from "./routes/Alerts";
 import Book from "./routes/Book";
+import NetworkMap from "./routes/NetworkMap";
+import Queues from "./routes/Queues";
+import Scenarios from "./routes/Scenarios";
 import PresenceBoard from "./routes/PresenceBoard";
 import DevUI from "./routes/DevUI";
 import Login from "./routes/Login";
@@ -22,34 +27,25 @@ createRoot(document.getElementById("root")!).render(
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route
-            path="/"
             element={
               <RequireAuth>
-                <PresenceBoard />
+                <Shell />
               </RequireAuth>
             }
-          />
-          <Route
-            path="/events"
-            element={
-              <RequireAuth>
-                <Dashboard />
-              </RequireAuth>
-            }
-          />
+          >
+            <Route path="/" element={<PresenceBoard />} />
+            <Route path="/queue" element={<Queues />} />
+            <Route path="/alerts" element={<Alerts />} />
+            <Route path="/map" element={<NetworkMap />} />
+            <Route path="/scenarios" element={<Scenarios />} />
+            <Route path="/events" element={<Dashboard />} />
+            <Route path="/dev/ui" element={<DevUI />} />
+          </Route>
           <Route
             path="/book"
             element={
               <RequireAuth>
                 <Book />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/dev/ui"
-            element={
-              <RequireAuth>
-                <DevUI />
               </RequireAuth>
             }
           />
