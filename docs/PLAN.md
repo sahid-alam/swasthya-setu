@@ -90,6 +90,16 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
   through a real relay (Gmail app password). Phone and email are separate Redis
   namespaces, so a code mailed to an inbox can never be spent against a phone number.
   Migration `0004`: `patients.email` + `EMAIL` on the channel enum.
+- [x] **WhatsApp live mode** (owner decision 2026-08-21) — `whatsapp_real.py` against the
+  Meta Cloud API, selected by `WHATSAPP_MOCK_MODE=false` with `WHATSAPP_TOKEN` and
+  `WHATSAPP_PHONE_NUMBER_ID`. Sends an approved template when `WHATSAPP_TEMPLATES` names
+  the message, free-form text otherwise — Meta only allows text inside 24h of the
+  patient's last message, and outside it the rejection (code 131047) is recorded with
+  Meta's own reason. Retries 3× on 5xx/timeout, never on 4xx. **Not yet verified against
+  a real number**: needs the token, the phone number ID, a verified recipient, and — for
+  cold OTP delivery — an approved authentication template. Mock stays the default.
+  Inbound over real WhatsApp is deliberately not built: it needs a public webhook with
+  Meta's signature check, and nobody asked for it.
 - [ ] Bhashini voice booking (constrained intent flow, mock mode + sandbox)
 - [ ] Outbound TTS reschedule calls (mock mode)
 - [ ] Kiosk mode skin for PWA

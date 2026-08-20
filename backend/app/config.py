@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     telephony_mock_mode: bool = True  # Exotel: IVR now, outbound TTS calls later
     email_mock_mode: bool = True  # false needs the SMTP_* block below
 
+    # Only read when whatsapp_mock_mode is false.
+    whatsapp_token: str = ""
+    whatsapp_phone_number_id: str = ""
+    whatsapp_api_version: str = "v21.0"
+    # JSON: {"otp": {"name": "setu_otp", "lang": "en", "params": ["code"]}}. A message
+    # named here goes as an approved template and works cold; anything else goes as
+    # free-form text, which Meta only allows inside the 24h customer-service window.
+    whatsapp_templates: str = ""
+
     # Only read when email_mock_mode is false (D10: no flag that does nothing).
     smtp_host: str = ""
     smtp_port: int = 587
