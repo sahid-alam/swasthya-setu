@@ -19,9 +19,14 @@ from app.models import Channel
 def messaging(channel: Channel) -> MessagingAdapter:
     settings = get_settings()
     if channel == Channel.SMS:
-        if settings.sms_mock_mode:
+        if mock_mode(Channel.SMS):
             return MockSms()
-        from app.adapters.sms_real import GatewaySms  # imported only when actually used
+        if settings.sms_provider.startswith("2factor"):
+            from app.adapters.sms_2factor import TwoFactorSms  # imported only when used
+
+            route = "SMS" if settings.sms_provider == "2factor-sms" else "VOICE"
+            return TwoFactorSms(route=route)
+        from app.adapters.sms_real import GatewaySms
 
         return GatewaySms()
     if channel == Channel.EMAIL:
@@ -58,7 +63,9 @@ def telephony() -> TelephonyAdapter:
 def mock_mode(channel: Channel) -> bool:
     settings = get_settings()
     return {
-        Channel.SMS: settings.sms_mock_mode,
+        # Either switch can force the mock, and neither can be overridden by the other:
+        # this is the channel that costs money and rings a real phone.
+        Channel.SMS: settings.sms_mock_mode or settings.sms_provider == "mock",
         Channel.WHATSAPP: settings.whatsapp_mock_mode,
         Channel.IVR: settings.telephony_mock_mode,
         Channel.EMAIL: settings.email_mock_mode,

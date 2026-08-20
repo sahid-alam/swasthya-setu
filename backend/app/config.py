@@ -19,6 +19,7 @@ NO_WHITESPACE = (
     "smtp_password",
     "sms_gateway_token",
     "sms_cloud_token",
+    "twofactor_api_key",
 )
 
 
@@ -54,6 +55,11 @@ class Settings(BaseSettings):
 
     # Only read when sms_mock_mode is false: an Android running the Traccar SMS
     # Gateway app, reachable on the LAN (never localhost from inside compose).
+    # Which live SMS implementation, once sms_mock_mode is false. Mock still wins if
+    # either says mock, so going live is a deliberate two-part act for the one channel
+    # that costs money and rings a stranger's phone.
+    sms_provider: str = "mock"  # mock | gateway | 2factor-voice | 2factor-sms
+    twofactor_api_key: str = ""
     sms_gateway_url: str = ""
     sms_gateway_token: str = ""
     # Traccar's Cloud Service: it pushes to the handset over FCM, so it works when the

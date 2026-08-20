@@ -36,6 +36,15 @@ class MessagingAdapter(ABC):
     async def send(self, *, to: str, template: str, params: dict) -> DeliveryResult:
         """`to` is a phone number in our own format; the adapter normalises it."""
 
+    def handles(self, template: str) -> bool:
+        """Whether this adapter can carry this kind of message at all.
+
+        Most can carry anything. An OTP-only route (2Factor delivers digits down a
+        phone line) says no to the rest, and the fan-out skips it rather than logging a
+        failure for a message it was never able to send.
+        """
+        return True
+
     @abstractmethod
     async def health(self) -> bool:
         """Cheap reachability probe; must never raise."""

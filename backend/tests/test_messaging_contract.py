@@ -210,23 +210,23 @@ def test_the_real_sms_ceiling_is_a_hard_stop(client, monkeypatch):
     from datetime import UTC, datetime
 
     from app import events
-    from app.adapters import sms_real
+    from app.adapters import sms_fence
 
     minute = datetime(2031, 4, 5, 6, 7, tzinfo=UTC)
 
     async def _drain():
-        for key, _, _ in sms_real._limit_keys(minute):
+        for key, _, _ in sms_fence._limit_keys(minute):
             await events.client().delete(key)
 
     client.portal.call(_drain)
     try:
         allowed = [
-            client.portal.call(lambda: sms_real.over_limit(minute))
-            for _ in range(sms_real.MAX_PER_MINUTE)
+            client.portal.call(lambda: sms_fence.over_limit(minute))
+            for _ in range(sms_fence.MAX_PER_MINUTE)
         ]
-        assert allowed == [None] * sms_real.MAX_PER_MINUTE
+        assert allowed == [None] * sms_fence.MAX_PER_MINUTE
 
-        refused = client.portal.call(lambda: sms_real.over_limit(minute))
+        refused = client.portal.call(lambda: sms_fence.over_limit(minute))
         assert refused and "per minute" in refused
     finally:
         client.portal.call(_drain)
@@ -243,6 +243,7 @@ def test_over_the_ceiling_is_a_failed_row_not_an_exception(client, monkeypatch):
     async def _always_full(_now=None):
         return "real-SMS rate limit reached (test); not sent"
 
+    # patched where it is used, not where it is defined
     monkeypatch.setattr(sms_real, "over_limit", _always_full)
     result = client.portal.call(
         lambda: sms_real.GatewaySms().send(
@@ -257,6 +258,7 @@ def test_the_cloud_relay_answers_200_even_when_it_refused(client, monkeypatch):
     """Traccar's relay returns 200 and puts FCM's verdict in the body. Trusting the
     status code would record a delivery that never left Google's servers — which is
     exactly what a stale Cloud token looks like."""
+    _no_fence(monkeypatch)
     import httpx
 
     from app.adapters import sms_real
@@ -317,3 +319,176 @@ def test_a_code_is_escaped_but_still_readable():
 
     html = as_html("Your code", "your login code is 123456", "otp", {"code": "123456"}, "EN")
     assert ">123456<" in html, "the six digits still render as digits"
+
+
+# ------------------------------------------------------------------ 2Factor (OTP only)
+
+
+def _no_fence(monkeypatch):
+    """Take the daily ceiling out of the way.
+
+    These tests exercise the live adapters against a stubbed HTTP layer, but the fence
+    is real and counts in Redis — so without this a day's testing spends the 30-per-day
+    budget and the suite starts failing by the calendar rather than by the code. The
+    fence has its own test above; here it is noise.
+    """
+
+    async def _clear(_now=None):
+        return None
+
+    for module in ("sms_real", "sms_2factor"):
+        import importlib
+
+        monkeypatch.setattr(importlib.import_module(f"app.adapters.{module}"), "over_limit", _clear)
+
+
+def _two_factor(monkeypatch, route="VOICE"):
+    from app.adapters import sms_2factor
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "twofactor_api_key", "test-key", raising=False)
+    return sms_2factor.TwoFactorSms(route=route)
+
+
+def test_2factor_carries_an_otp_and_nothing_else(monkeypatch):
+    """It delivers digits down a phone line. A booking confirmation is a sentence, and
+    reading one out as a robocall is not a feature — those go by Telegram or email."""
+    adapter = _two_factor(monkeypatch)
+    assert adapter.handles("otp") is True
+    assert adapter.handles("booked") is False
+    assert adapter.handles("rescheduled") is False
+
+
+def test_the_fan_out_skips_an_otp_only_route_instead_of_failing_it(client, monkeypatch):
+    """Skipped, not FAILED: a FAILED row reads as 'we tried and could not reach them'."""
+    from app.adapters.base import MessagingAdapter
+    from app.models import Channel
+    from app.services import notify
+
+    class OtpOnly(MessagingAdapter):
+        channel = Channel.SMS
+
+        def handles(self, template):
+            return template == "otp"
+
+        async def send(self, **_):
+            raise AssertionError("must never be asked to send a booking confirmation")
+
+        async def health(self):
+            return True
+
+    monkeypatch.setattr(notify, "messaging", lambda channel: OtpOnly())
+
+    class FakePatient:
+        id = "00000000-0000-0000-0000-000000000000"
+        phone = "9418000001"
+        email = None
+        telegram_chat_id = None
+
+    class FakeDb:
+        def add(self, row):
+            pass
+
+        async def flush(self):
+            return None
+
+    written = client.portal.call(
+        lambda: notify._fan_out(
+            FakeDb(), None, FakePatient(), "booked", {"language": "EN"}, [Channel.SMS]
+        )
+    )
+    assert written == [], "no attempt, no row — it was never a way to send this"
+
+
+def test_2factor_builds_the_documented_url(client, monkeypatch):
+    """GET /{key}/{route}/{phone}/{otp} — and the number goes bare, no +91."""
+    _no_fence(monkeypatch)
+    import httpx
+
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={"Status": "Success", "Details": "abc-123"})
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *a, **k: real_client(*a, **{**k, "transport": httpx.MockTransport(handler)}),
+    )
+
+    adapter = _two_factor(monkeypatch)
+    result = client.portal.call(
+        lambda: adapter.send(to="+91 94180 00001", template="otp", params={"code": "123456"})
+    )
+    assert result.status is NotificationStatus.SENT
+    assert result.provider_ref == "abc-123"
+    assert seen["url"].endswith("/test-key/VOICE/9418000001/123456")
+
+
+def test_2factor_answers_200_when_it_refused(client, monkeypatch):
+    """Status lives in the body, not the status code — a bad key still returns 200."""
+    _no_fence(monkeypatch)
+    import httpx
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *a, **k: real_client(
+            *a,
+            **{
+                **k,
+                "transport": httpx.MockTransport(
+                    lambda r: httpx.Response(
+                        200, json={"Status": "Error", "Details": "Invalid API Key"}
+                    )
+                ),
+            },
+        ),
+    )
+    adapter = _two_factor(monkeypatch)
+    result = client.portal.call(
+        lambda: adapter.send(to="9418000001", template="otp", params={"code": "123456"})
+    )
+    assert result.status is NotificationStatus.FAILED
+    assert "Invalid API Key" in result.error
+
+
+def test_2factor_without_a_key_fails_loudly(monkeypatch):
+    from app.adapters import sms_2factor
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "twofactor_api_key", "", raising=False)
+    with pytest.raises(AdapterError):
+        sms_2factor.TwoFactorSms()
+
+
+def test_the_outbox_row_describes_the_call_without_repeating_the_code(client, monkeypatch):
+    """A voice row has no message to show, so it needs a description — but writing the
+    digits into a table any staff login can read would undo a one-time code."""
+    _no_fence(monkeypatch)
+    import httpx
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *a, **k: real_client(
+            *a,
+            **{
+                **k,
+                "transport": httpx.MockTransport(
+                    lambda r: httpx.Response(200, json={"Status": "Success", "Details": "ref"})
+                ),
+            },
+        ),
+    )
+    adapter = _two_factor(monkeypatch)
+    result = client.portal.call(
+        lambda: adapter.send(to="9418000001", template="otp", params={"code": "424242"})
+    )
+    assert "Voice call placed" in result.payload["body"]
+    assert "424242" not in result.payload["body"]
+    assert "424242" not in str(result.payload)

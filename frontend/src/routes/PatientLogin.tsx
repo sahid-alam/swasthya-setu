@@ -18,6 +18,9 @@ export default function PatientLogin() {
   const [code, setCode] = useState("");
   const [stage, setStage] = useState<"phone" | "code">("phone");
   const [note, setNote] = useState("");
+  // How this deployment delivers a phone code. Server configuration, not a fact about
+  // the caller — so rendering it cannot tell anyone whether a number is registered.
+  const [delivery, setDelivery] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -30,11 +33,15 @@ export default function PatientLogin() {
     setBusy(true);
     setError("");
     try {
-      await fetch("/api/v1/auth/otp/request", {
+      const res = await fetch("/api/v1/auth/otp/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(contact()),
       });
+      setDelivery(
+        ((await res.json().catch(() => ({}))) as { delivery?: string })
+          .delivery ?? "",
+      );
       // the answer is the same whether or not the number is on file, by design
       setNote(say("codeSent"));
       setStage("code");
@@ -127,6 +134,19 @@ export default function PatientLogin() {
         ) : (
           <form onSubmit={verify} className="mt-6 grid gap-4">
             {note && <p className="text-[15px] text-muted">{note}</p>}
+            {/* Static per deployment, so it never becomes a way to probe a number. */}
+            <p className="text-[15px]">
+              {delivery === "call"
+                ? say("codeByCall")
+                : delivery === "email"
+                  ? say("codeByEmail")
+                  : delivery === "sms"
+                    ? say("codeBySms")
+                    : null}
+            </p>
+            {via === "phone" && (
+              <p className="text-[14px] text-muted">{say("codeInTelegram")}</p>
+            )}
             <FieldBlock label={say("codeLabel")} error={error}>
               <Input
                 value={code}

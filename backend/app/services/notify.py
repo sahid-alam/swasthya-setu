@@ -93,7 +93,13 @@ async def _fan_out(
             # Selection is inside the try on purpose: a live adapter whose credentials
             # are missing raises while being *built*, and that must degrade like any
             # other vendor failure rather than 500 the flow that asked for it.
-            result = await messaging(channel).send(to=to, template=template, params=params)
+            adapter = messaging(channel)
+            if not adapter.handles(template):
+                # Not a failure: an OTP-only route was never a way to send this, and a
+                # FAILED row would read as "we tried and could not reach them".
+                log.info("%s cannot carry %s; skipping", channel.value, template)
+                continue
+            result = await adapter.send(to=to, template=template, params=params)
         except AdapterError as exc:
             # A vendor failing must degrade, never crash a clinical flow.
             log.warning("%s adapter refused: %s", channel.value, exc)

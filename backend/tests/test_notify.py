@@ -2,7 +2,13 @@
 
 import pytest
 
-from app.adapters.base import AdapterError, DeliveryResult, normalise_phone, render
+from app.adapters.base import (
+    AdapterError,
+    DeliveryResult,
+    MessagingAdapter,
+    normalise_phone,
+    render,
+)
 from app.adapters.whatsapp_mock import parse_reply
 from app.models import Channel, NotificationStatus
 
@@ -68,7 +74,9 @@ async def test_sms_takes_over_when_whatsapp_refuses(monkeypatch):
     from app.adapters import factory
     from app.services import notify
 
-    class AlwaysFails:
+    # Subclassed, not duck-typed: a double that does not implement the interface stops
+    # standing in for it the moment the interface grows a method.
+    class AlwaysFails(MessagingAdapter):
         channel = Channel.WHATSAPP
 
         async def send(self, **_):

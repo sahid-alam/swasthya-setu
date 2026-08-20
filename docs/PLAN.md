@@ -136,6 +136,16 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
   in Redis, never used by tests, refused by `demo-check`. **Not verified against the
   handset**: the phone answered no ARP on the LAN and the app's Cloud token is
   `NotRegistered` — reopen the app for a fresh one, then `make sms-probe --send`.
+- [x] **2Factor OTP delivery, voice route** (owner decision 2026-08-21) —
+  `sms_2factor.py` behind the SMS channel, chosen with `SMS_PROVIDER`
+  (`mock` | `gateway` | `2factor-voice` | `2factor-sms`), mock default and mock wins if
+  either switch says so. **Voice is live and SMS is off on purpose**: 2Factor's SMS
+  route reports DELIVERED and is still carrier-filtered before it arrives, and a
+  delivery receipt from the sender is not evidence of arrival. We generate the code;
+  2Factor only carries it. **OTP-only** — `handles()` refuses anything else and the
+  fan-out skips rather than logging a failure, so no booking confirmation is ever read
+  down a phone line. Shares the 30/day, 5/minute fence, now in `adapters/sms_fence.py`.
+  Verified live from the login screen's own request: a real call, `mock=false`.
 - [ ] Bhashini voice booking (constrained intent flow, mock mode + sandbox)
 - [ ] Outbound TTS reschedule calls (mock mode)
 - [ ] Kiosk mode skin for PWA

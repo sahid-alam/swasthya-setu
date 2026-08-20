@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import events
 from app.adapters.base import AdapterError, normalise_email
+from app.config import get_settings
 from app.models import Channel, Patient
 from app.services import notify
 
@@ -70,6 +71,19 @@ async def _within_rate_limit(kind: str, value: str) -> bool:
     if count == 1:
         await client.expire(key, REQUEST_WINDOW_SECONDS)
     return count <= MAX_REQUESTS_PER_WINDOW
+
+
+def phone_delivery() -> str:
+    """What a phone code will do on this deployment, as a word the UI can render.
+
+    Configuration only. It never looks at the caller, because "your code is coming by
+    Telegram" would reveal that this number has a chat linked — the same thing the
+    endpoint refuses to say about whether the number is registered at all.
+    """
+    settings = get_settings()
+    if settings.sms_mock_mode or settings.sms_provider == "mock":
+        return "outbox"
+    return "call" if settings.sms_provider == "2factor-voice" else "sms"
 
 
 def _otp_channel(kind: str, via: str | None, patient: Patient) -> Channel:

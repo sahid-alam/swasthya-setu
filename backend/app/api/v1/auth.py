@@ -67,6 +67,10 @@ class OtpRequestIn(OtpContact):
 class OtpRequestOut(BaseModel):
     sent: bool
     message: str
+    # How a phone code travels on this deployment: "call", "sms", or "chat" when a
+    # linked Telegram is possible. Derived from configuration only — never from the
+    # caller — so it cannot become a way to ask whether a number is registered.
+    delivery: str = "sms"
 
 
 class OtpVerifyIn(OtpContact):
@@ -87,6 +91,7 @@ async def request_otp(body: OtpRequestIn, db: AsyncSession = Depends(get_db)) ->
     return OtpRequestOut(
         sent=True,
         message="If that contact is registered, we have sent it a code.",
+        delivery="email" if body.email else otp.phone_delivery(),
     )
 
 
