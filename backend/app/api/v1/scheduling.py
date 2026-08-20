@@ -5,7 +5,7 @@ every solve records its status, objective, duration and how many patients moved.
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -214,3 +214,71 @@ async def clinic(
             )
         )
     return sorted(out, key=lambda r: (-r.booked, r.doctor_name))
+
+
+class QueueEntryOut(BaseModel):
+    position: int
+    appointment_id: str
+    patient_name: str
+    scheduled_for: datetime
+    priority: PriorityClass
+    predicted_wait_minutes: int | None
+    noshow_prob: float | None
+    doctor_name: str
+
+
+@router.get("/scheduling/queue", response_model=list[QueueEntryOut])
+async def queue(
+    department_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(STAFF),
+) -> list[QueueEntryOut]:
+    """Who is still waiting, and how long each of them will actually wait.
+
+    The prediction is per queue *position*, not per appointment time — the honest
+    question a patient asks is "how long from now", and that depends on how far the
+    clinic has already slipped.
+    """
+    from app.services import models as ml
+
+    rows = (
+        await db.execute(
+            select(Appointment, Slot, Patient, User, Doctor)
+            .join(Slot, Slot.id == Appointment.slot_id)
+            .join(Patient, Patient.id == Appointment.patient_id)
+            .join(Doctor, Doctor.id == Slot.doctor_id)
+            .join(User, User.id == Doctor.user_id)
+            .where(
+                Appointment.department_id == department_id,
+                Appointment.status == AppointmentStatus.BOOKED,
+                Slot.starts_at >= func.now(),
+            )
+            .order_by(Slot.starts_at)
+        )
+    ).all()
+
+    out: list[QueueEntryOut] = []
+    ahead_per_doctor: dict[uuid.UUID, int] = {}
+    now = datetime.now(UTC)
+    for position, (appt, slot, patient, user, doctor) in enumerate(rows):
+        ahead = ahead_per_doctor.get(doctor.id, 0)
+        ahead_per_doctor[doctor.id] = ahead + 1
+        # how far behind the clinic already is, from this doctor's first waiting slot
+        delay = max((now - slot.starts_at).total_seconds() / 60, 0.0)
+        out.append(
+            QueueEntryOut(
+                position=position,
+                appointment_id=str(appt.id),
+                patient_name=patient.name,
+                scheduled_for=slot.starts_at,
+                priority=appt.priority_class,
+                predicted_wait_minutes=ml.predict_wait_minutes(
+                    ahead_in_queue=ahead,
+                    avg_consult_minutes=doctor.avg_consult_minutes,
+                    current_delay_minutes=delay,
+                ),
+                noshow_prob=float(appt.noshow_prob) if appt.noshow_prob is not None else None,
+                doctor_name=user.name,
+            )
+        )
+    return out

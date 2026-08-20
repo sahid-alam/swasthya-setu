@@ -34,12 +34,15 @@ Order matters: presence → optimizer → one channel → dashboard, then widen.
 - [x] Unit tests: decay, conflicting signals, roster fallback
 
 ### 1B. Appointment & queue engine
-- [ ] Slot model + availability derivation from presence + roster
-- [ ] CP-SAT allocation service with priority classes; benchmark <5s for 1-hospital day
-- [ ] No-show model: train offline on 110k dataset, commit artifact, inference endpoint, metrics endpoint
-- [ ] Wait-time model: features + committed artifact + per-queue-position prediction
-- [ ] Auto-reschedule pipeline: presence change → replan → notification fan-out (events only for now)
-- [ ] SimPy comparison script: CP-SAT vs FCFS on identical demand (produces the judge chart)
+- [x] Slot model + availability derivation from presence + roster
+- [x] CP-SAT allocation service with priority classes; benchmark <5s for 1-hospital day —
+  worst case 176 ms, median 12 ms across all 10 IGMC doctors
+- [x] No-show model: train offline on 110k dataset, commit artifact, inference endpoint, metrics endpoint
+- [x] Wait-time model: features + committed artifact + per-queue-position prediction —
+  *trained on synthetic clinic days, labelled SYNTHETIC everywhere it surfaces*
+- [x] Auto-reschedule pipeline: presence change → replan → notification fan-out (events only for now) —
+  `appointments.replanned` verified arriving on the dashboard socket
+- [x] SimPy comparison script: CP-SAT vs FCFS on identical demand (produces the judge chart)
 
 ### 1C. Patient access core
 - [ ] Booking API (channel-agnostic): search slots, book, cancel, reschedule
@@ -210,3 +213,62 @@ a display string) and `doctors.face_embedding`. SCHEMA.md updated.
 
 **Next session picks up:** Phase 1B, first item — slot model + availability derivation from
 presence + roster. Still open: the Supabase question (see 2026-08-19 entry).
+
+### 2026-08-20 (later — Phase 1B)
+
+**Done:** Phase 1B complete. 70 backend tests green, lint clean, suite stable over
+three consecutive runs.
+
+**The M2 flagship works end to end:** a doctor with 39 upcoming patients is marked on
+leave; the clinic is redistributed automatically in ~300 ms (OPTIMAL, nobody dropped);
+`presence.changed` and `appointments.replanned` both arrive on the dashboard socket.
+
+**The availability rule (the M1/M2 hinge), settled in writing before any solver code:**
+the roster decides when slots *exist*; a **confident** presence state removes them; a
+low-confidence state changes nothing — because a low-confidence state *is* the roster,
+and letting it cancel clinics would be the system arguing with itself. One function,
+`services/availability.unavailability_for`, ARCHITECTURE D15.
+
+**Benchmarks (real, not projected):** replanning every IGMC doctor in turn — worst case
+176 ms, median 12 ms, 3.5% of the 5 s budget. The `plan_runs` table records every solve,
+and `GET /scheduling/plan-runs` is the evidence, the same way `presence_transitions` is
+the evidence for presence.
+
+**Models.** No-show is trained on the real public 110,527-row dataset: ROC-AUC 0.735,
+Brier 0.143 vs a 0.161 base-rate baseline. Wait-time has no real dataset to train on, so
+it uses simulated clinic days and says SYNTHETIC in the manifest, the metrics file and
+the API response. MAE 15.0 min vs the 27.3 min you get from `people ahead × consult
+length`. `make train` regenerates all of it; the 10 MB source CSV is gitignored and its
+sha256 is recorded in the artifact.
+
+**The FCFS comparison did not say what we wanted, so it says what it found.** With spare
+capacity CP-SAT does *not* reduce mean displacement — 23.1 vs 22.7 min, marginally
+*worse* — it changes who waits, protecting referred (0 vs 25 min) and priority (8 vs 49
+min) patients at general patients' expense. In a busy department, mean displacement is
+71.8 vs 147.8 min (51% lower) and FCFS drops referred patients entirely. **Say "the right
+people wait less", never "everyone waits less"** — the second claim is false and a judge
+who probes will find that out.
+
+**Two bugs worth remembering:**
+- The first wait model scored a suspiciously good 1.3 min MAE because `minutes_into_clinic`
+  was the time the patient was *actually seen* — the target was a function of the features.
+  Refeatured to only what is knowable while standing in the queue. Any future model: ask
+  what is knowable *at prediction time* before choosing features.
+- Three `str.replace` patches to conftest silently no-op'd because the target text had
+  drifted, and I chased a phantom test failure for several rounds. Use the Edit tool for
+  surgical edits — it fails loudly on no-match — and reserve blind replace for fresh files.
+
+**Docker:** compose now installs `libgomp1` (xgboost needs OpenMP on Debian, the same
+problem `brew install libomp` fixes on macOS) and mounts `../ml:/ml:ro` so the committed
+artifacts are reachable. Not re-run since those edits — verify before relying on it.
+
+**Known gaps, stated honestly:**
+- Replan runs inline in the request rather than off the pub/sub topic (D16). Fine at
+  ~300 ms; revisit if solve times approach the budget.
+- Unplaceable patients are CANCELLED. Correct-ish, but they need the 1C notification
+  ("we could not find you a new slot") before this is defensible in front of a patient.
+- Overbooking is implemented and capped but never fires in the seeded demo, because
+  seeded no-show probabilities cluster near the 0.20 base rate and the threshold is 0.50.
+
+**Next session picks up:** Phase 1C, first item — the channel-agnostic booking API.
+Still open: the Supabase question (2026-08-19 entry).

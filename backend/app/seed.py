@@ -190,7 +190,42 @@ async def seed_clinic_day(db, rng: random.Random, now: datetime, patients: list)
             slot.status = SlotStatus.FULL
             booked += 1
     await db.flush()
+    await _score_noshow(db, now)
     return len(all_slots), booked
+
+
+async def _score_noshow(db, now: datetime) -> None:
+    """Give every upcoming appointment a no-show probability from the committed model.
+
+    Without this the queue view shows a dash for most patients, which reads as broken
+    rather than as "not scored yet".
+    """
+    from app.services import models as ml
+
+    if not ml.available():
+        print("        (no-show model unavailable — probabilities left unset)")
+        return
+
+    rows = (
+        await db.execute(
+            select(Appointment, Slot, Patient)
+            .join(Slot, Slot.id == Appointment.slot_id)
+            .join(Patient, Patient.id == Appointment.patient_id)
+            .where(Appointment.status == AppointmentStatus.BOOKED, Slot.starts_at >= now)
+        )
+    ).all()
+    for appt, slot, patient in rows:
+        flags = patient.priority_flags or {}
+        appt.noshow_prob = ml.predict_noshow(
+            # booked "yesterday": the seed has no real booking timestamps, and lead
+            # time is the model's strongest feature so it must not be zero for everyone
+            booked_at=now - timedelta(days=1),
+            appointment_at=slot.starts_at,
+            age=patient.age,
+            is_female=(patient.gender or "F").upper().startswith("F"),
+            handicap=bool(flags.get("disabled")),
+        )
+    await db.flush()
 
 
 async def main() -> None:
