@@ -88,6 +88,7 @@ Bookings made offline go to a local PouchDB `outbox`; on reconnect they sync to 
 | D17 | Rebook rather than rewrite: original row kept as RESCHEDULED, new row links via `rescheduled_from` | Preserves the chain a patient (and a judge) can follow, and `appointments.slot_id` is RESTRICT so slots are only ever re-pointed | — |
 | D18 | Wait-time model trains on simulated clinic days, labelled SYNTHETIC everywhere it surfaces | No public dataset gives per-position OPD waits; Iron Rule 5 says say so rather than imply otherwise | Real HMIS queue data arrives |
 | D19 | Overbooking is capped at 3 per doctor per day, only on seats whose occupant is ≥50% likely to miss | Overbooking is a bet, and losing it means a real person waits in a corridor | Measured no-show calibration improves |
+| D20 | An unseatable patient becomes RESCHEDULE_PENDING, never a silent CANCELLED | A cancelled row means the patient finds out by turning up to an empty clinic; pending keeps them owed an appointment and on a staff screen | — |
 
 ## Ports (dev)
 
