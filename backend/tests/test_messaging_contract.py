@@ -293,3 +293,27 @@ def test_the_cloud_relay_answers_200_even_when_it_refused(client, monkeypatch):
     assert result.status is NotificationStatus.FAILED
     assert "cloud relay refused" in result.error
     assert "SMS_CLOUD_TOKEN" in result.error, "the error must name the fix"
+
+
+def test_the_html_email_cannot_carry_someone_elses_markup():
+    """Patients type their own names at Telegram self-registration, and this document
+    is sent over our name into a third party's inbox. Nothing interpolated into it may
+    be able to close a tag."""
+    from app.adapters.email_smtp import as_html
+
+    nasty = 'Asha <script>alert(1)</script> & <a href="http://evil">click</a>'
+    html = as_html(nasty, f"Confirmed with Dr {nasty}", "booked", {}, "EN")
+
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html
+    assert 'href="http://evil"' not in html
+    assert "&amp;" in html, "an ampersand in a name must not start an entity"
+    # and the layout's own markup still has to survive
+    assert "<table" in html and "</html>" in html
+
+
+def test_a_code_is_escaped_but_still_readable():
+    from app.adapters.email_smtp import as_html
+
+    html = as_html("Your code", "your login code is 123456", "otp", {"code": "123456"}, "EN")
+    assert ">123456<" in html, "the six digits still render as digits"

@@ -24,6 +24,7 @@ import logging
 import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
+from html import escape
 
 from app.adapters.base import (
     AdapterError,
@@ -108,7 +109,7 @@ def as_html(subject_line: str, body: str, template: str, params: dict, language:
             primary=PRIMARY,
             muted=MUTED,
             label=CODE_LABEL.get(language.upper(), CODE_LABEL["EN"]),
-            code=params["code"],
+            code=escape(str(params["code"])),
         )
     return HTML.format(
         bg=BG,
@@ -120,8 +121,12 @@ def as_html(subject_line: str, body: str, template: str, params: dict, language:
         muted=MUTED,
         tagline=TAGLINE.get(language.upper(), TAGLINE["EN"]),
         footer=FOOTER.get(language.upper(), FOOTER["EN"]),
-        subject=subject_line,
-        body=body.replace("\n", "<br>"),
+        subject=escape(subject_line),
+        # Escape first, then turn newlines into breaks — the other order would escape
+        # the <br> we just added. Everything reaching here is ours today, but patients
+        # now type their own names at self-registration, and this is a document sent
+        # to third parties over our name: it must not be able to carry their markup.
+        body=escape(body).replace("\n", "<br>"),
         feature=feature,
     )
 
