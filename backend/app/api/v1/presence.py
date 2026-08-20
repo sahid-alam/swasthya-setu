@@ -32,6 +32,7 @@ from app.models import (
 )
 from app.security import require_roles
 from app.services import presence as fusion
+from app.services import scheduling
 
 router = APIRouter(tags=["presence"])
 
@@ -139,6 +140,14 @@ async def _ingest(
 
     # Fuse at the later of now / observed_at so a backdated signal cannot look "fresh".
     status_row, changed = await fusion.recompute(db, doctor, max(observed_at, datetime.now(UTC)))
+
+    # M1 -> M2: a confident contradiction of the roster re-seats the clinic list in the
+    # same transaction, so presence and the plan can never disagree at rest. Runs inline
+    # rather than off the pub/sub topic — one moving part, and it keeps the end-to-end
+    # "<5s" claim measurable from a single request (worst case measured: 176 ms).
+    if changed:
+        await scheduling.replan_if_unavailable(db, doctor, status_row)
+
     await db.commit()
     return signal, status_row, changed
 

@@ -26,3 +26,128 @@ def admin_token(client) -> str:
     )
     assert r.status_code == 200, "run `make seed` first — tests need the seeded admin"
     return r.json()["access_token"]
+
+
+@pytest.fixture
+def fresh_badge(client):
+    """Reset one doctor's presence + clinic list so a test does not inherit state from
+    an earlier run. Tests may touch the database directly; simulators may not."""
+    import os
+
+    from sqlalchemy import NullPool, text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    async def _wipe(badge: str) -> None:
+        engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
+        async with engine.begin() as conn:
+            doctor_id = (
+                await conn.execute(text("select id from doctors where badge_id = :b"), {"b": badge})
+            ).scalar_one()
+            for table in ("presence_signals", "presence_transitions"):
+                await conn.execute(
+                    text(f"delete from {table} where doctor_id = :d"), {"d": doctor_id}
+                )
+            await conn.execute(
+                text(
+                    "update doctor_status set state='UNKNOWN', confidence=0, zone_id=null,"
+                    " evidence='{}' where doctor_id = :d"
+                ),
+                {"d": doctor_id},
+            )
+        await engine.dispose()
+
+    def wipe(badge: str) -> str:
+        client.portal.call(_wipe, badge)
+        return badge
+
+    return wipe
+
+
+@pytest.fixture
+def clinic_list(client):
+    """Give a doctor a known, upcoming clinic list.
+
+    The replan tests mutate appointments, so they cannot lean on whatever the seed
+    left behind or on the order tests happen to run in — each builds its own.
+    """
+    import os
+
+    from sqlalchemy import NullPool, text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    async def _build(badge: str, size: int) -> int:
+        engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
+        async with engine.begin() as conn:
+            doctor = (
+                await conn.execute(
+                    text("select id, department_id, hospital_id from doctors where badge_id = :b"),
+                    {"b": badge},
+                )
+            ).one()
+            # Reset the whole department, not just this doctor: a replan needs
+            # colleagues with free seats and no leftover ON_LEAVE from an earlier
+            # test, or there is nowhere to move anyone and the run looks like a bug.
+            dep = {"dep": doctor.department_id}
+            await conn.execute(
+                text(
+                    "delete from appointments where slot_id in (select id from slots"
+                    " where department_id = :dep and starts_at >= now())"
+                ),
+                dep,
+            )
+            await conn.execute(
+                text(
+                    "update slots set status='OPEN'"
+                    " where department_id = :dep and starts_at >= now()"
+                ),
+                dep,
+            )
+            await conn.execute(
+                text(
+                    "update doctor_status set state='UNKNOWN', confidence=0, evidence='{}'"
+                    " where doctor_id in (select id from doctors where department_id = :dep)"
+                ),
+                dep,
+            )
+            slot_ids = [
+                r[0]
+                for r in (
+                    await conn.execute(
+                        text(
+                            "select id from slots where doctor_id = :d and starts_at >= now()"
+                            " order by starts_at limit :n"
+                        ),
+                        {"d": doctor.id, "n": size},
+                    )
+                ).all()
+            ]
+            patients = [
+                r[0]
+                for r in (
+                    await conn.execute(text("select id from patients limit :n"), {"n": size})
+                ).all()
+            ]
+            for slot_id, patient_id in zip(slot_ids, patients, strict=False):
+                await conn.execute(
+                    text(
+                        "insert into appointments (patient_id, slot_id, hospital_id,"
+                        " department_id, channel, priority_class, status)"
+                        " values (:p, :s, :h, :dep, 'PWA', 'GENERAL', 'BOOKED')"
+                    ),
+                    {
+                        "p": patient_id,
+                        "s": slot_id,
+                        "h": doctor.hospital_id,
+                        "dep": doctor.department_id,
+                    },
+                )
+                await conn.execute(
+                    text("update slots set status='FULL' where id = :s"), {"s": slot_id}
+                )
+        await engine.dispose()
+        return len(slot_ids)
+
+    def build(badge: str, size: int = 40) -> int:
+        return client.portal.call(_build, badge, size)
+
+    return build

@@ -5,11 +5,7 @@ integration test asserting the expected transitions — these are those tests, d
 through the same HTTP endpoint the simulators and real hardware use.
 """
 
-import os
-
 import pytest
-from sqlalchemy import NullPool, text
-from sqlalchemy.ext.asyncio import create_async_engine
 
 BADGE = "HP-DOC-1001"
 
@@ -17,37 +13,6 @@ BADGE = "HP-DOC-1001"
 @pytest.fixture
 def auth(admin_token):
     return {"Authorization": f"Bearer {admin_token}"}
-
-
-@pytest.fixture
-def fresh_badge(client, auth):
-    """Wipe one doctor's presence history so a test does not inherit signals left by
-    an earlier run. Tests may touch the database directly; simulators may not."""
-
-    async def _wipe(badge: str) -> None:
-        engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
-        async with engine.begin() as conn:
-            doctor_id = (
-                await conn.execute(text("select id from doctors where badge_id = :b"), {"b": badge})
-            ).scalar_one()
-            for table in ("presence_signals", "presence_transitions"):
-                await conn.execute(
-                    text(f"delete from {table} where doctor_id = :d"), {"d": doctor_id}
-                )
-            await conn.execute(
-                text(
-                    "update doctor_status set state='UNKNOWN', confidence=0, zone_id=null,"
-                    " evidence='{}' where doctor_id = :d"
-                ),
-                {"d": doctor_id},
-            )
-        await engine.dispose()
-
-    def wipe(badge: str) -> str:
-        client.portal.call(_wipe, badge)
-        return badge
-
-    return wipe
 
 
 @pytest.fixture

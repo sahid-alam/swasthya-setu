@@ -9,10 +9,13 @@ import math
 import random
 from datetime import UTC, datetime, time, timedelta
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.db import SessionLocal
 from app.models import (
+    Appointment,
+    AppointmentStatus,
+    Channel,
     Department,
     Doctor,
     DoctorStatus,
@@ -21,8 +24,11 @@ from app.models import (
     Language,
     Patient,
     PresenceState,
+    PriorityClass,
     Shift,
     ShiftKind,
+    Slot,
+    SlotStatus,
     User,
     UserRole,
     Zone,
@@ -97,6 +103,96 @@ def unit_vector(rng: random.Random, dim: int = 512) -> list[float]:
     return [round(x / norm, 6) for x in v]
 
 
+# The doctor the "calls in sick at 9 AM with 40 booked patients" demo hangs off.
+DEMO_BADGE = "HP-DOC-1001"
+DEMO_BOOKINGS = 40
+
+
+async def seed_clinic_day(db, rng: random.Random, now: datetime, patients: list) -> tuple[int, int]:
+    """Slots for every OPD shift, then a plausible booking load on top.
+
+    Two things matter for the M2 demo and both are easy to get wrong:
+    the demo doctor must have ~40 appointments still *ahead* of now, and the rest of
+    the department must keep real gaps, or a replan has nowhere to move anyone.
+    """
+    doctors = (await db.execute(select(Doctor))).scalars().all()
+    shifts = (await db.execute(select(Shift).where(Shift.kind == ShiftKind.OPD))).scalars().all()
+    by_doctor: dict = {}
+    for shift in shifts:
+        by_doctor.setdefault(shift.doctor_id, []).append(shift)
+
+    horizon = now + timedelta(days=2)
+    all_slots: list[Slot] = []
+    slots_by_doctor: dict = {}
+    for doctor in doctors:
+        for shift in sorted(by_doctor.get(doctor.id, []), key=lambda s: s.starts_at):
+            if shift.starts_at > horizon:
+                continue
+            cursor = shift.starts_at
+            length = timedelta(minutes=doctor.avg_consult_minutes)
+            while cursor + length <= shift.ends_at:
+                slot = Slot(
+                    doctor_id=doctor.id,
+                    department_id=doctor.department_id,
+                    starts_at=cursor,
+                    ends_at=cursor + length,
+                    capacity=1,
+                    status=SlotStatus.OPEN,
+                )
+                all_slots.append(slot)
+                slots_by_doctor.setdefault(doctor.id, []).append(slot)
+                cursor += length
+    db.add_all(all_slots)
+    await db.flush()
+
+    demo_doctor = next(d for d in doctors if d.badge_id == DEMO_BADGE)
+    booked = 0
+    for doctor in doctors:
+        upcoming = [
+            s
+            for s in slots_by_doctor.get(doctor.id, [])
+            if now <= s.starts_at < now + timedelta(hours=12)
+        ]
+        past = [s for s in slots_by_doctor.get(doctor.id, []) if s.starts_at < now]
+
+        if doctor.id == demo_doctor.id:
+            # the clinic list the "calls in sick" scenario has to redistribute
+            chosen = upcoming[:DEMO_BOOKINGS]
+        else:
+            # a real clinic is not booked front to back; sample so gaps stay scattered
+            chosen = rng.sample(upcoming, k=int(len(upcoming) * 0.45)) if upcoming else []
+        chosen += rng.sample(past, k=int(len(past) * 0.8)) if past else []
+
+        for slot in chosen:
+            patient = rng.choice(patients)
+            flags = patient.priority_flags
+            priority = (
+                PriorityClass.PRIORITY
+                if (flags.get("elderly") or flags.get("disabled") or flags.get("pregnant"))
+                else PriorityClass.GENERAL
+            )
+            db.add(
+                Appointment(
+                    patient_id=patient.id,
+                    slot_id=slot.id,
+                    hospital_id=doctor.hospital_id,
+                    department_id=doctor.department_id,
+                    channel=rng.choice([Channel.PWA, Channel.WHATSAPP, Channel.SMS, Channel.STAFF]),
+                    priority_class=priority,
+                    status=(
+                        AppointmentStatus.COMPLETED
+                        if slot.starts_at < now
+                        else AppointmentStatus.BOOKED
+                    ),
+                    token_number=booked % 200 + 1,
+                )
+            )
+            slot.status = SlotStatus.FULL
+            booked += 1
+    await db.flush()
+    return len(all_slots), booked
+
+
 async def main() -> None:
     rng = random.Random(2026)  # fixed: the demo must look the same every run
     now = datetime.now(UTC)
@@ -106,7 +202,8 @@ async def main() -> None:
         await db.execute(
             text(
                 "TRUNCATE hospitals, departments, users, doctors, patients, shifts, zones, "
-                "doctor_status RESTART IDENTITY CASCADE"
+                "doctor_status, slots, appointments, queue_entries, notifications, plan_runs "
+                "RESTART IDENTITY CASCADE"
             )
         )
 
@@ -189,15 +286,20 @@ async def main() -> None:
                     await db.flush()
 
                     enrolled = rng.random() < 0.6
+                    badge_id = f"HP-DOC-{badge}"
                     doc = Doctor(
                         user_id=user.id,
                         hospital_id=hosp.id,
                         department_id=dept.id,
                         specialty=code,
-                        badge_id=f"HP-DOC-{badge}",
+                        badge_id=badge_id,
                         face_enrolled=enrolled,
                         face_embedding=unit_vector(rng) if enrolled else None,
-                        avg_consult_minutes=rng.choice([8, 10, 12, 15]),
+                        # the demo doctor is pinned to 10 min so a 7-hour day-0 clinic
+                        # holds the 40 appointments PRD §M2's accept scenario names
+                        avg_consult_minutes=(
+                            10 if badge_id == DEMO_BADGE else rng.choice([8, 10, 12, 15])
+                        ),
                     )
                     db.add(doc)
                     await db.flush()
@@ -208,7 +310,9 @@ async def main() -> None:
                     # is rehearsed at, or every board reads OFF_SHIFT (Iron Rule 4).
                     for day in range(7):
                         if day == 0:
-                            start = now - timedelta(hours=2)
+                            # long enough that ~40 slots are still ahead of "now"
+                            # whatever hour the demo is rehearsed at
+                            start = now - timedelta(hours=1)
                         else:
                             start = datetime.combine(
                                 today + timedelta(days=day), time(9, 0), tzinfo=UTC
@@ -218,7 +322,7 @@ async def main() -> None:
                                 doctor_id=doc.id,
                                 department_id=dept.id,
                                 starts_at=start,
-                                ends_at=start + timedelta(hours=6),
+                                ends_at=start + timedelta(hours=8 if day == 0 else 6),
                                 kind=ShiftKind.OPD,
                             )
                         )
@@ -234,9 +338,10 @@ async def main() -> None:
                         )
                     )
 
+        patients = []
         for i in range(200):
             age = rng.randint(1, 88)
-            db.add(
+            patients.append(
                 Patient(
                     name=f"{rng.choice(FIRST)} {rng.choice(LAST)}",
                     phone=f"98{rng.randint(10000000, 99999999)}",
@@ -252,9 +357,14 @@ async def main() -> None:
                     preferred_language=Language.HI if i % 4 else Language.EN,
                 )
             )
+        db.add_all(patients)
+        await db.flush()
+
+        slots, appointments = await seed_clinic_day(db, rng, now, patients)
 
         await db.commit()
         print(f"seeded {len(hospitals)} hospitals, {doctor_count} doctors, 200 patients")
+        print(f"        {slots} slots, {appointments} appointments ({DEMO_BADGE} is the busy one)")
         print(f"admin login: {ADMIN_PHONE} / {ADMIN_PASSWORD}")
 
 

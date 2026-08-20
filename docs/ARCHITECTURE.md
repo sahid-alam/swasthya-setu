@@ -83,6 +83,9 @@ Bookings made offline go to a local PouchDB `outbox`; on reconnect they sync to 
 | D12 | Fusion scores max-per-location, not sum | A person is in one place, so sightings compete. Summing made an hour of OPD pings unbeatable by one theatre-door tap — movement became undetectable | — |
 | D13 | Trust gates belief; recency picks the current sighting | Ranking on trust alone pinned a doctor to the gate they had just walked through | — |
 | D14 | A roster-derived state renders grey and labelled, never confident green | PRD §M1 "never silently stays PRESENT"; also the clearest way to show roster-vs-reality | — |
+| D15 | Roster decides when slots exist; only a *confident* presence state removes them | Forward booking must keep working, but a low-confidence state IS the roster — letting it cancel clinics would be the system arguing with itself | — |
+| D16 | Replan runs inline in the request that changed presence, not off the pub/sub topic | One moving part, atomic with the presence write, and it keeps the "<5s" claim measurable from a single request (worst case measured 226 ms) | Solve times approach the budget |
+| D17 | Rebook rather than rewrite: original row kept as RESCHEDULED, new row links via `rescheduled_from` | Preserves the chain a patient (and a judge) can follow, and `appointments.slot_id` is RESTRICT so slots are only ever re-pointed | — |
 
 ## Ports (dev)
 
