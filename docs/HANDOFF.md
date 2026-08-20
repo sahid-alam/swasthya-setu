@@ -32,7 +32,7 @@ cd backend && DATABASE_URL="postgresql+asyncpg://setu:setu@localhost:5432/swasth
 cd frontend && npm run dev      # http://localhost:5173
 ```
 
-Staff login **9418000001 / setu-admin**. Patient login is `/patient` (phone OTP; the code
+Staff login **9418000001**; the password is printed by `make seed` and kept in the gitignored `.admin-password` (or set `ADMIN_PASSWORD` in `.env`). Nothing in this repo contains it. Patient login is `/patient` (phone OTP; the code
 appears in the mock outbox at `GET /api/v1/notifications`).
 
 `infra/demo-script.md` is the presenter runbook — every command in it was executed, not

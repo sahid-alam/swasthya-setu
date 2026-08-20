@@ -1,7 +1,23 @@
+import logging
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+log = logging.getLogger("swasthya.config")
+
+# Credentials that can never legitimately contain whitespace. A token copied out of
+# BotFather across a line wrap, or a Gmail app password shown in groups of four, both
+# arrive with spaces in them and both fail with an error that names nothing useful —
+# Telegram answers a token with a space in it with a bare 404.
+NO_WHITESPACE = (
+    "telegram_bot_token",
+    "whatsapp_token",
+    "vapi_private_key",
+    "vapi_public_key",
+    "smtp_password",
+    "sms_gateway_token",
+)
 
 
 class Settings(BaseSettings):
@@ -13,6 +29,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://setu:setu@localhost:5432/swasthya"
     redis_url: str = "redis://localhost:6379/0"
     jwt_secret: str = "change-me"
+    # Seeded staff login. Empty means `make seed` generates one and writes it to the
+    # gitignored .admin-password — a password committed to a repo is not a password.
+    admin_password: str = ""
     jwt_ttl_minutes: int = 12 * 60
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:4173"]
 
@@ -92,6 +111,15 @@ class Settings(BaseSettings):
 
     # .env.example also lists the remaining *_MOCK_MODE flags; those arrive with their
     # adapters.
+
+    @field_validator(*NO_WHITESPACE, mode="after")
+    @classmethod
+    def _strip_whitespace(cls, value: str, info) -> str:
+        cleaned = "".join(value.split())
+        if cleaned != value:
+            # Repaired, not hidden: silently fixing it would leave .env wrong forever.
+            log.warning("%s contained whitespace; stripped it", info.field_name.upper())
+        return cleaned
 
 
 @lru_cache

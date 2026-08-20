@@ -17,7 +17,25 @@ API = os.environ.get("SETU_API", "http://localhost:8000")
 # A field gateway would carry its own device credential; the demo reuses the seeded
 # admin so `make demo` needs no extra setup.
 GATEWAY_PHONE = os.environ.get("SETU_SIM_PHONE", "9418000001")
-GATEWAY_PASSWORD = os.environ.get("SETU_SIM_PASSWORD", "setu-admin")
+
+
+def _admin_password() -> str:
+    """No password lives in this repo. `make seed` either uses ADMIN_PASSWORD from the
+    environment or generates one into the gitignored .admin-password beside the repo."""
+    from pathlib import Path
+
+    for candidate in (os.environ.get("SETU_SIM_PASSWORD"), os.environ.get("ADMIN_PASSWORD")):
+        if candidate:
+            return candidate
+    stored = Path(__file__).resolve().parents[1] / ".admin-password"
+    if stored.exists():
+        return stored.read_text().strip()
+    raise SystemExit(
+        "no admin password: run `make seed`, or set ADMIN_PASSWORD/SETU_SIM_PASSWORD"
+    )
+
+
+GATEWAY_PASSWORD = _admin_password()
 
 SIM_SPEED = int(os.environ.get("SIM_SPEED", "1"))
 

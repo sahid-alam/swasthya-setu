@@ -6,7 +6,9 @@ Run: cd backend && .venv/bin/python -m app.seed
 
 import asyncio
 import math
+import pathlib
 import random
+import secrets
 from datetime import UTC, datetime, time, timedelta
 
 from sqlalchemy import select, text
@@ -38,7 +40,25 @@ from app.models import (
 from app.security import hash_password
 
 ADMIN_PHONE = "9418000001"
-ADMIN_PASSWORD = "setu-admin"  # dev-only; real deployments set it via env before first boot
+# The admin password is never in this repo. `ADMIN_PASSWORD` in the environment wins;
+# otherwise one is generated on first seed and kept in a gitignored file beside the
+# repo, so `make demo` still works on a clean checkout and every machine gets its own.
+PASSWORD_FILE = pathlib.Path(__file__).resolve().parents[2] / ".admin-password"
+
+
+def resolve_admin_password() -> str:
+    from_env = get_settings().admin_password.strip()
+    if from_env:
+        return from_env
+    if PASSWORD_FILE.exists():
+        return PASSWORD_FILE.read_text().strip()
+    generated = secrets.token_urlsafe(12)
+    PASSWORD_FILE.write_text(generated + "\n")
+    PASSWORD_FILE.chmod(0o600)
+    return generated
+
+
+ADMIN_PASSWORD = resolve_admin_password()
 
 HOSPITALS = [
     (
@@ -448,7 +468,12 @@ async def main() -> None:
         # against a real inbox. Deliberately the first seeded patient — deterministic
         # under the fixed RNG — and nobody else, because inventing 200 addresses would
         # be inventing 200 facts.
+        # A value that is not an address is almost always a comment the .env parser
+        # kept — ignore it loudly rather than mailing OTPs into the void.
         demo_email = get_settings().demo_patient_email.strip()
+        if demo_email and "@" not in demo_email:
+            print(f"ignoring DEMO_PATIENT_EMAIL, that is not an address: {demo_email[:40]!r}")
+            demo_email = ""
         if demo_email:
             patients[0].email = demo_email
 
@@ -460,7 +485,10 @@ async def main() -> None:
         await db.commit()
         print(f"seeded {len(hospitals)} hospitals, {doctor_count} doctors, 200 patients")
         print(f"        {slots} slots, {appointments} appointments ({DEMO_BADGE} is the busy one)")
-        print(f"admin login: {ADMIN_PHONE} / {ADMIN_PASSWORD}")
+        where = (
+            "ADMIN_PASSWORD in the environment" if get_settings().admin_password else PASSWORD_FILE
+        )
+        print(f"admin login: {ADMIN_PHONE} / {ADMIN_PASSWORD}   (from {where})")
         print(f"patient login: {patients[0].phone} (phone OTP)", end="")
         print(
             f" or {demo_email} (email OTP)"

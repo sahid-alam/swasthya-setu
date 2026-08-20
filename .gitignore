@@ -8,5 +8,6 @@ dist/
 dev-dist/
 *.tsbuildinfo
 .env
+.admin-password
 .DS_Store
 ml/data/

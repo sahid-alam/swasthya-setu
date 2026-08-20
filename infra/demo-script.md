@@ -42,14 +42,19 @@ type into:
 
 ```bash
 TOK=$(curl -s -X POST localhost:8000/api/v1/auth/token \
-  -d 'username=9418000001&password=setu-admin' | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
+  -d "username=9418000001&password=$(cat .admin-password)" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
 ```
+
+There is no password in this repo. `make seed` prints the staff password and writes it
+to the gitignored `.admin-password`; set `ADMIN_PASSWORD` in `.env` if you would rather
+choose one.
 
 ### Where things are
 
 | Route | What |
 |---|---|
-| `/login` | staff sign-in — **9418000001 / setu-admin** |
+| `/login` | staff sign-in — **9418000001**, password from `.admin-password` |
 | `/` | presence board (the opening shot) |
 | `/queue` | queues with predicted waits |
 | `/alerts` | roster-vs-presence mismatches, overflow, pending rebookings |
