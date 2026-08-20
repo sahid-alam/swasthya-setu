@@ -19,9 +19,13 @@ class Settings(BaseSettings):
     # dead beacon decay instead of sitting on a stale PRESENT. 0 disables (tests).
     presence_sweep_seconds: int = 20
 
-    # .env.example also lists COUCHDB_URL, SIM_SPEED and the per-service *_MOCK_MODE
-    # flags. They are declared here only when something reads them, so a flag that
-    # appears in this class is a flag that actually does something.
+    # Adapters default to mock (Iron Rule 1). Declared here because the factory reads
+    # them — a flag in this class is a flag that actually does something.
+    sms_mock_mode: bool = True
+    whatsapp_mock_mode: bool = True
+
+    # .env.example also lists COUCHDB_URL and the remaining *_MOCK_MODE flags; those
+    # arrive with their adapters.
 
 
 @lru_cache

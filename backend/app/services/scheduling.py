@@ -80,6 +80,9 @@ class Move:
     to_doctor_id: uuid.UUID | None
     displacement_minutes: int
     priority: PriorityClass
+    # the replacement row created by _apply; notifications quote its time, not the
+    # old one, so the patient is told where to actually turn up
+    rescheduled_to: uuid.UUID | None = None
 
 
 @dataclass
@@ -215,7 +218,11 @@ async def replan_doctor(
         (result.moves if target else result.unplaced).append(move)
 
     if apply:
-        await _apply(db, bookings, slots, assignment, now)
+        moved_to = await _apply(db, bookings, slots, assignment, now)
+        for move in result.moves:
+            replacement = moved_to.get(move.appointment_id)
+            if replacement is not None:
+                move.rescheduled_to = replacement.id
 
     db.add(
         PlanRun(
@@ -297,11 +304,15 @@ async def _apply(
     slots: list[Slot],
     assignment: dict[int, int],
     now: datetime,
-) -> None:
+) -> dict[uuid.UUID, Appointment]:
     """Rebook rather than rewrite: the original row is kept and marked RESCHEDULED so
     `rescheduled_from` gives the patient (and a judge) the full chain. Slots are only
-    ever re-pointed, never deleted — `appointments.slot_id` is RESTRICT."""
+    ever re-pointed, never deleted — `appointments.slot_id` is RESTRICT.
+
+    Returns old appointment id -> its replacement, so notifications can quote the new
+    time rather than the one the patient can no longer attend."""
     noshow = await _noshow_for(db, bookings, slots, assignment, now)
+    moved_to: dict[uuid.UUID, Appointment] = {}
     for ai, booking in enumerate(bookings):
         appt = booking.appointment
         si = assignment.get(ai)
@@ -314,24 +325,25 @@ async def _apply(
 
         target = slots[si]
         target.status = SlotStatus.FULL
-        db.add(
-            Appointment(
-                patient_id=appt.patient_id,
-                slot_id=target.id,
-                hospital_id=appt.hospital_id,
-                department_id=appt.department_id,
-                channel=appt.channel,
-                priority_class=appt.priority_class,
-                status=AppointmentStatus.BOOKED,
-                token_number=appt.token_number,
-                # a moved appointment is a fresh bet: the lead time changed, so the
-                # probability of them turning up changed with it
-                noshow_prob=noshow.get(appt.patient_id, appt.noshow_prob),
-                rescheduled_from=appt.id,
-            )
+        replacement = Appointment(
+            patient_id=appt.patient_id,
+            slot_id=target.id,
+            hospital_id=appt.hospital_id,
+            department_id=appt.department_id,
+            channel=appt.channel,
+            priority_class=appt.priority_class,
+            status=AppointmentStatus.BOOKED,
+            token_number=appt.token_number,
+            # a moved appointment is a fresh bet: the lead time changed, so the
+            # probability of them turning up changed with it
+            noshow_prob=noshow.get(appt.patient_id, appt.noshow_prob),
+            rescheduled_from=appt.id,
         )
+        db.add(replacement)
         appt.status = AppointmentStatus.RESCHEDULED
+        moved_to[appt.id] = replacement
     await db.flush()
+    return moved_to
 
 
 async def _noshow_for(

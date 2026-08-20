@@ -1,0 +1,219 @@
+"""Booking API — one implementation, every channel (PRD §M3).
+
+The PWA, WhatsApp, SMS and the kiosk all land here. A rule that lives in a channel
+adapter instead of the service would mean the same patient gets different answers
+depending on how they asked.
+"""
+
+import uuid
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db import get_db
+from app.models import (
+    Appointment,
+    AppointmentStatus,
+    Channel,
+    Doctor,
+    Hospital,
+    Notification,
+    Patient,
+    PriorityClass,
+    Slot,
+    User,
+    UserRole,
+)
+from app.security import require_roles
+from app.services import booking, notify
+
+router = APIRouter(tags=["booking"])
+STAFF = require_roles(UserRole.ADMIN, UserRole.STAFF)
+
+
+class OfferOut(BaseModel):
+    slot_id: str
+    doctor_name: str
+    department: str
+    hospital: str
+    starts_at: datetime
+    ends_at: datetime
+
+
+class BookIn(BaseModel):
+    patient_id: uuid.UUID
+    slot_id: uuid.UUID
+    channel: Channel = Channel.PWA
+
+
+class AppointmentOut(BaseModel):
+    appointment_id: str
+    patient_name: str
+    doctor_name: str
+    hospital: str
+    starts_at: datetime
+    token_number: int | None
+    status: AppointmentStatus
+    priority: PriorityClass
+    noshow_prob: float | None = None
+
+
+class RescheduleIn(BaseModel):
+    to_slot_id: uuid.UUID
+
+
+async def _describe(db: AsyncSession, appointment_id: uuid.UUID) -> AppointmentOut:
+    appt, slot, patient, user, hosp = (
+        await db.execute(
+            select(Appointment, Slot, Patient, User, Hospital)
+            .join(Slot, Slot.id == Appointment.slot_id)
+            .join(Patient, Patient.id == Appointment.patient_id)
+            .join(Doctor, Doctor.id == Slot.doctor_id)
+            .join(User, User.id == Doctor.user_id)
+            .join(Hospital, Hospital.id == Appointment.hospital_id)
+            .where(Appointment.id == appointment_id)
+        )
+    ).one()
+    return AppointmentOut(
+        appointment_id=str(appt.id),
+        patient_name=patient.name,
+        doctor_name=user.name,
+        hospital=hosp.name,
+        starts_at=slot.starts_at,
+        token_number=appt.token_number,
+        status=appt.status,
+        priority=appt.priority_class,
+        noshow_prob=float(appt.noshow_prob) if appt.noshow_prob is not None else None,
+    )
+
+
+@router.get("/booking/slots", response_model=list[OfferOut])
+async def search(
+    department_id: uuid.UUID,
+    days: int = Query(7, ge=1, le=30),
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(STAFF),
+) -> list[OfferOut]:
+    offers = await booking.search_slots(db, department_id=department_id, days=days, limit=limit)
+    return [
+        OfferOut(
+            slot_id=str(o.slot_id),
+            doctor_name=o.doctor_name,
+            department=o.department,
+            hospital=o.hospital,
+            starts_at=o.starts_at,
+            ends_at=o.ends_at,
+        )
+        for o in offers
+    ]
+
+
+@router.post("/booking", response_model=AppointmentOut, status_code=status.HTTP_201_CREATED)
+async def create(
+    body: BookIn, db: AsyncSession = Depends(get_db), _=Depends(STAFF)
+) -> AppointmentOut:
+    try:
+        appt = await booking.book(
+            db, patient_id=body.patient_id, slot_id=body.slot_id, channel=body.channel
+        )
+    except booking.BookingError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await notify.notify_appointment(db, appt.id, "booked")
+    await db.commit()
+    return await _describe(db, appt.id)
+
+
+@router.post("/booking/{appointment_id}/cancel", response_model=AppointmentOut)
+async def cancel(
+    appointment_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(STAFF)
+) -> AppointmentOut:
+    try:
+        appt = await booking.cancel(db, appointment_id=appointment_id)
+    except booking.BookingError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await notify.notify_appointment(db, appt.id, "cancelled")
+    await db.commit()
+    return await _describe(db, appt.id)
+
+
+@router.post("/booking/{appointment_id}/reschedule", response_model=AppointmentOut)
+async def move(
+    appointment_id: uuid.UUID,
+    body: RescheduleIn,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(STAFF),
+) -> AppointmentOut:
+    try:
+        appt = await booking.reschedule(
+            db, appointment_id=appointment_id, to_slot_id=body.to_slot_id
+        )
+    except booking.BookingError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await notify.notify_appointment(db, appt.id, "rescheduled")
+    await db.commit()
+    return await _describe(db, appt.id)
+
+
+@router.get("/booking/patient/{patient_id}", response_model=list[AppointmentOut])
+async def for_patient(
+    patient_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(STAFF)
+) -> list[AppointmentOut]:
+    ids = (
+        (
+            await db.execute(
+                select(Appointment.id)
+                .join(Slot, Slot.id == Appointment.slot_id)
+                .where(Appointment.patient_id == patient_id)
+                .order_by(Slot.starts_at.desc())
+                .limit(20)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [await _describe(db, i) for i in ids]
+
+
+class OutboxOut(BaseModel):
+    at: datetime | None
+    channel: Channel
+    template: str
+    status: str
+    mock: bool
+    to: str | None = None
+    body: str | None = None
+    error: str | None = None
+
+
+@router.get("/notifications", response_model=list[OutboxOut])
+async def outbox(
+    limit: int = Query(50, le=500), db: AsyncSession = Depends(get_db), _=Depends(STAFF)
+) -> list[OutboxOut]:
+    """The demo outbox. Mock adapters write real rows here, so a judge can see that
+    forty patients were actually told — without a vendor account (ARCHITECTURE D4)."""
+    rows = (
+        (
+            await db.execute(
+                select(Notification).order_by(Notification.created_at.desc()).limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        OutboxOut(
+            at=n.sent_at,
+            channel=n.channel,
+            template=n.template,
+            status=n.status.value,
+            mock=n.mock,
+            to=(n.payload or {}).get("to"),
+            body=(n.payload or {}).get("body"),
+            error=(n.payload or {}).get("error"),
+        )
+        for n in rows
+    ]

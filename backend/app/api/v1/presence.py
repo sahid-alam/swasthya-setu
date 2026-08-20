@@ -31,8 +31,8 @@ from app.models import (
     Zone,
 )
 from app.security import require_roles
+from app.services import notify, scheduling
 from app.services import presence as fusion
-from app.services import scheduling
 
 router = APIRouter(tags=["presence"])
 
@@ -146,7 +146,11 @@ async def _ingest(
     # rather than off the pub/sub topic — one moving part, and it keeps the end-to-end
     # "<5s" claim measurable from a single request (worst case measured: 176 ms).
     if changed:
-        await scheduling.replan_if_unavailable(db, doctor, status_row)
+        plan = await scheduling.replan_if_unavailable(db, doctor, status_row)
+        if plan is not None:
+            # Telling people is part of the replan, not a follow-up job. A plan that
+            # moved forty patients and told none of them is worse than no plan.
+            await notify.notify_replan(db, plan)
 
     await db.commit()
     return signal, status_row, changed
