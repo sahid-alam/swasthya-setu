@@ -1,4 +1,5 @@
 import logging
+from email.utils import parseaddr
 from functools import lru_cache
 
 from pydantic import AliasChoices, Field, field_validator
@@ -123,6 +124,21 @@ class Settings(BaseSettings):
 
     # .env.example also lists the remaining *_MOCK_MODE flags; those arrive with their
     # adapters.
+
+    @field_validator("smtp_from", "demo_patient_email", mode="after")
+    @classmethod
+    def _must_look_like_an_address(cls, value: str, info) -> str:
+        """Parsed, not pattern-matched: a swallowed comment can easily contain an `@`
+        (`# "Setu <you@gmail.com>"; defaults to ...` does), and putting that in a From
+        header gets the whole message rejected by the relay. parseaddr returns an empty
+        address for anything that is not one."""
+        if not value:
+            return value
+        _, address = parseaddr(value)
+        if "@" not in address:
+            log.warning("%s is not an email address; ignoring it", info.field_name.upper())
+            return ""
+        return value
 
     @field_validator(*NO_WHITESPACE, mode="after")
     @classmethod

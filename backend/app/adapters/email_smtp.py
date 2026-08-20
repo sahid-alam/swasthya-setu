@@ -23,6 +23,7 @@ import asyncio
 import logging
 import smtplib
 from email.message import EmailMessage
+from email.utils import formataddr, formatdate, make_msgid
 
 from app.adapters.base import (
     AdapterError,
@@ -57,8 +58,16 @@ class SmtpEmail(MessagingAdapter):
         address = normalise_email(to)
         language = params.get("language", "EN")
         message = EmailMessage()
-        message["From"] = self._s.smtp_from or self._s.smtp_username
+        # A display name, a Date and a Message-ID are what ordinary mail clients put on
+        # every message. Their absence is a cheap spam signal, and this is the one part
+        # of deliverability we control — the rest is domain reputation, which a Gmail
+        # app password cannot buy. Expect the first send to land in spam regardless.
+        message["From"] = self._s.smtp_from or formataddr(("Swasthya-Setu", self._s.smtp_username))
         message["To"] = address
+        message["Reply-To"] = self._s.smtp_username
+        message["Date"] = formatdate(localtime=True)
+        message["Message-ID"] = make_msgid(domain=self._s.smtp_username.split("@")[-1])
+        message["Auto-Submitted"] = "auto-generated"  # RFC 3834: this is transactional
         message["Subject"] = subject(template, language)
         message.set_content(render(template, params, language))
 
@@ -72,7 +81,13 @@ class SmtpEmail(MessagingAdapter):
                     status=NotificationStatus.SENT,
                     mock=False,
                     provider_ref=new_ref("smtp"),
-                    payload={"to": address, "subject": message["Subject"]},
+                    # Body included, like the mock does: the outbox is judge-facing
+                    # evidence, and "we sent something to this address" is not evidence.
+                    payload={
+                        "to": address,
+                        "subject": message["Subject"],
+                        "body": message.get_content(),
+                    },
                 )
             except RETRYABLE as exc:
                 last = exc
@@ -86,7 +101,11 @@ class SmtpEmail(MessagingAdapter):
             status=NotificationStatus.FAILED,
             mock=False,
             error=str(last),
-            payload={"to": address, "subject": message["Subject"]},
+            payload={
+                "to": address,
+                "subject": message["Subject"],
+                "body": message.get_content(),
+            },
         )
 
     def _deliver(self, message: EmailMessage) -> None:
