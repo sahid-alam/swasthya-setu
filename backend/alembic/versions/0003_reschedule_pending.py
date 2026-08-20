@@ -37,9 +37,7 @@ def downgrade() -> None:
     # Postgres cannot drop an enum value, so rebuild the type. Anyone left pending
     # becomes CANCELLED, which is exactly the behaviour this migration replaced.
     listed = ", ".join(f"'{v}'" for v in VALUES)
-    op.execute(
-        "UPDATE appointments SET status = 'CANCELLED' WHERE status = 'RESCHEDULE_PENDING'"
-    )
+    op.execute("UPDATE appointments SET status = 'CANCELLED' WHERE status = 'RESCHEDULE_PENDING'")
     op.execute(f"CREATE TYPE appointment_status_old AS ENUM ({listed})")
     op.execute(
         "ALTER TABLE appointments ALTER COLUMN status TYPE appointment_status_old"
