@@ -10,7 +10,7 @@ PostgreSQL 16. All tables: `id UUID PK default gen_random_uuid()`, `created_at`,
 **departments** — hospital_id FK, name, specialty_code, room_count
 **users** — name, phone (unique), email?, password_hash?, role(enum: ADMIN|DOCTOR|STAFF|PATIENT), hospital_id FK?
 **doctors** — user_id FK, hospital_id FK, department_id FK, specialty, badge_id (unique; what BLE/RFID track), face_enrolled bool, face_embedding jsonb? (voluntary enrolment; the vector only, never an image), avg_consult_minutes
-**patients** — user_id FK?, name, phone, telegram_chat_id? (nullable; Telegram hands it to us when the patient shares their contact — a bot cannot address anyone by phone number), email? (nullable, not unique — an inbox is the exception here and a family may share one; `ix_patients_email_lower` for the case-insensitive lookup email OTP does), age, gender, village/district, priority_flags jsonb (elderly, disabled, pregnant…), preferred_language(enum: HI|EN)
+**patients** — user_id FK?, name, phone, registered_via? (channel enum, nullable — set only when the patient signed themselves up through a channel; NULL means a hospital record, and no screen should confuse the two), telegram_chat_id? (nullable; Telegram hands it to us when the patient shares their contact — a bot cannot address anyone by phone number), email? (nullable, not unique — an inbox is the exception here and a family may share one; `ix_patients_email_lower` for the case-insensitive lookup email OTP does), age, gender, village/district, priority_flags jsonb (elderly, disabled, pregnant…), preferred_language(enum: HI|EN)
 
 ## Presence (M1)
 

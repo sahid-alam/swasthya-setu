@@ -142,6 +142,16 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
   `SMS_TEST_RECIPIENT` documented but never declared as a setting. `DEMO_PATIENT_PHONE`
   now puts the operator's number on the first seeded patient, since a re-seed wipes both
   the phone and the chat link.
+- [x] **Telegram is a full booking channel** (owner decision 2026-08-21, stands in for
+  WhatsApp until template approval) — language first, then Telegram's own contact-share
+  button, then department → time → confirm through the same `services/booking.py`.
+  **A number we do not know is registered on the spot** rather than turned away:
+  Telegram vouches for the number it hands over, which is a stronger claim than anything
+  typed into a form, and migration `0006` adds `patients.registered_via` so a
+  self-registration never gets mistaken for a hospital record. `CANCEL` is honoured,
+  because every confirmation promises it. Hindi and English throughout, and the language
+  chosen in the chat is written back to the patient — answering in Hindi someone who
+  just tapped English is the system telling them their choice did not count.
 - [ ] Bhashini voice booking (constrained intent flow, mock mode + sandbox)
 - [ ] Outbound TTS reschedule calls (mock mode)
 - [ ] Kiosk mode skin for PWA

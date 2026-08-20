@@ -277,6 +277,12 @@ class Patient(Base):
     # Not a number we chose: Telegram hands it to us when the patient shares their
     # contact, and it is the only way a bot may address them (services/telegram_link).
     telegram_chat_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Set only when the patient registered themselves through a channel. NULL means a
+    # hospital record — a screen that cannot tell the two apart launders one into the
+    # other, and "who told us this?" is the first question a registrar asks.
+    registered_via: Mapped[Channel | None] = mapped_column(
+        pg_enum(Channel, "channel"), nullable=True
+    )
     age: Mapped[int | None] = mapped_column(SmallInteger)
     gender: Mapped[str | None] = mapped_column(String(16))
     village: Mapped[str | None] = mapped_column(String(120))
