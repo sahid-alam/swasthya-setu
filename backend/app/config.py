@@ -62,6 +62,11 @@ class Settings(BaseSettings):
         ),
     )
     vapi_public_key: str = ""
+    # Vapi accepted these on the create call, which is the only validation available —
+    # there is no voice-list endpoint on this API version. Change them here rather than
+    # in code when you want a different voice.
+    vapi_voice_provider: str = "vapi"
+    vapi_voice_id: str = "Elliot"
     vapi_assistant_id: str = ""  # written by infra/vapi_setup.py, then set here
     # Vapi calls our tools from its own servers, so this must be reachable from the
     # internet. Empty means the assistant is created without server tools — it can

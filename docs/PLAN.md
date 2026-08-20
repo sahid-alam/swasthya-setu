@@ -100,18 +100,23 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
   cold OTP delivery — an approved authentication template. Mock stays the default.
   Inbound over real WhatsApp is deliberately not built: it needs a public webhook with
   Meta's signature check, and nobody asked for it.
-- [~] **Vapi voice agent** (owner decision 2026-08-21) — backend done, assistant blocked.
+- [~] **Vapi voice agent** (owner decision 2026-08-21) — built; booking blocked on a deploy.
   `POST /channels/vapi/tools` takes Vapi's tool-call envelope (`adapters/vapi.py` is the
   only code that knows its shape), authenticated by a shared secret header because Vapi
   cannot hold our JWT, and closed with a 503 when `VAPI_TOOL_SECRET` is unset. Three
   tools — `find_patient`, `find_slots`, `book_slot` — booking through the same
   `services/booking.py` as every other channel. Verified end-to-end with
   `simulators/vapi_call.py`, which posts the same envelope with no internet: books with
-  `channel=VOICE` and lands a receipt in the outbox. **Blocked on two things**: the key
-  in `.env` is Vapi's *public* key, and creating the assistant needs the *private* one;
-  and the tools need `PUBLIC_BASE_URL` — a deployment — before Vapi's servers can reach
-  them. `infra/vapi_setup.py` creates/updates the assistant idempotently the moment
-  both exist. Dashboard call button still to build (needs the public key at build time).
+  `channel=VOICE` and lands a receipt in the outbox. The assistant now exists —
+  `45374521-8b3b-427e-ac06-58f36e493044`, voice `vapi/Elliot`, 3 tools — created by
+  `infra/vapi_setup.py` and then updated by re-running it, which proves both paths.
+  The dashboard button is built and gated on `VITE_VAPI_PUBLIC_KEY` +
+  `VITE_VAPI_ASSISTANT_ID`: unset, it says so and names the IVR fallback, and Vite
+  tree-shakes the 300 kB SDK out of the bundle entirely. Set, the SDK is a lazy
+  `vapi-*.js` chunk explicitly excluded from the PWA precache — a patient on a budget
+  Android must not download a voice agent they will never open. **Still blocked on the
+  deployment**: with no `PUBLIC_BASE_URL` the assistant can talk but its tools cannot
+  reach us, so it cannot book. Re-run `vapi_setup.py` after deploying to wire them.
 - [ ] Bhashini voice booking (constrained intent flow, mock mode + sandbox)
 - [ ] Outbound TTS reschedule calls (mock mode)
 - [ ] Kiosk mode skin for PWA

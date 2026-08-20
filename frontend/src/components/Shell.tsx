@@ -1,5 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 
+import VoiceCall from "./VoiceCall";
+
 /** Command centre chrome — DESIGN.md §4 (floating dark dock) and §9a (this is the
  *  one surface that gets the full treatment; the PWA deliberately gets none of it). */
 
@@ -38,6 +40,9 @@ export default function Shell() {
       </nav>
       {/* 68px dock + 16px inset either side */}
       <div className="pl-[100px]">
+        <div className="flex justify-end px-6 pt-4">
+          <VoiceCall />
+        </div>
         <Outlet />
       </div>
     </div>

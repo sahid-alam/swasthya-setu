@@ -9,8 +9,14 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      // fonts are bundled assets, so the shell renders with no network (Iron Rule 4)
-      workbox: { globPatterns: ["**/*.{js,css,html,woff2,svg,png}"] },
+      // fonts are bundled assets, so the shell renders with no network (Iron Rule 4).
+      // The Vapi SDK is the one thing deliberately NOT precached: 300 kB of voice
+      // agent on a patient's budget Android, for a button that only exists in the
+      // staff dashboard and only works online anyway.
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,woff2,svg,png}"],
+        globIgnores: ["**/vapi-*.js"],
+      },
       manifest: {
         name: "Swasthya-Setu",
         short_name: "Swasthya",
@@ -29,11 +35,26 @@ export default defineConfig({
       },
     }),
   ],
+  // The one .env at the repo root serves backend and frontend alike; without this
+  // Vite looks in frontend/ and silently sees no VITE_* vars at all.
+  envDir: "..",
   server: {
     port: 5173,
     proxy: {
       "/api": "http://localhost:8000",
       "/ws": { target: "ws://localhost:8000", ws: true },
+    },
+  },
+  build: {
+    rollupOptions: {
+      // Named so the service worker can recognise it above; a hashed anonymous chunk
+      // could not be excluded by pattern.
+      output: {
+        manualChunks: (id: string) =>
+          id.includes("@vapi-ai") || id.includes("@daily-co")
+            ? "vapi"
+            : undefined,
+      },
     },
   },
   test: {

@@ -59,7 +59,10 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "phone": {"type": "string", "description": "Ten-digit Indian mobile number"}
+                    "phone": {
+                        "type": "string",
+                        "description": "Ten-digit Indian mobile number",
+                    }
                 },
                 "required": ["phone"],
             },
@@ -69,7 +72,9 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "find_slots",
-            "description": "Open appointment times in a department. Read the options back verbatim.",
+            "description": (
+                "Open appointment times in a department. Read the options back verbatim."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -109,7 +114,10 @@ def payload(settings) -> dict:
             "messages": [{"role": "system", "content": SYSTEM_PROMPT}],
             "tools": TOOLS,
         },
-        "voice": {"provider": "vapi", "voiceId": "Elliot"},
+        "voice": {
+            "provider": settings.vapi_voice_provider,
+            "voiceId": settings.vapi_voice_id,
+        },
     }
     if settings.public_base_url:
         # Vapi calls this from its own servers, so it has to be reachable from the
@@ -124,7 +132,9 @@ def payload(settings) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--show", action="store_true", help="list assistants, change nothing")
+    ap.add_argument(
+        "--show", action="store_true", help="list assistants, change nothing"
+    )
     args = ap.parse_args()
 
     settings = get_settings()
