@@ -11,6 +11,7 @@ you what was already broken.
 
 import asyncio
 import json
+import os
 import subprocess
 import sys
 
@@ -27,11 +28,17 @@ def report(step, ok, detail=""):
 
 
 def psql(sql):
+    # A local brew postgres trusts the socket; the compose one wants a password. And a
+    # failure used to come back as an empty string, which surfaced much later as an
+    # unpack error rather than "psql could not connect".
     out = subprocess.run(
         ["psql", "-U", "setu", "-h", "localhost", "-d", "swasthya", "-tAc", sql],
         capture_output=True,
         text=True,
+        env={**os.environ, "PGPASSWORD": os.environ.get("PGPASSWORD", "setu")},
     )
+    if out.returncode:
+        raise SystemExit(f"psql failed: {out.stderr.strip()}")
     return out.stdout.strip()
 
 

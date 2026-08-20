@@ -36,6 +36,11 @@ appears in the mock outbox at `GET /api/v1/notifications`).
 `infra/demo-script.md` is the presenter runbook — every command in it was executed, not
 written from memory.
 
+`make dev` (docker compose) is verified as of 2026-08-21 — four containers, artifacts
+loaded through the `/ml` mount, `demo-check` 8/8 against them. **Stop brew postgres and
+redis first**, compose publishes 5432/6379 too, and the first build pulls ~500 MB. The
+demo itself runs on `dev-local`: seconds to start instead of minutes.
+
 ## What exists
 
 | Area | State |
@@ -81,11 +86,6 @@ second-guessed:
 
 ## Honest gaps — say these out loud, do not paper over them
 
-- **Docker not re-verified** since compose gained `libgomp1` and the `../ml:/ml:ro` mount.
-  Compose ran green before those edits. It is the only untested path; the demo runs on
-  `dev-local`. Deferred by explicit decision.
-- **`docs/PRD.md §M3` still says "(PouchDB→CouchDB sync)"** — the hook blocks editing the
-  PRD, correctly. Either amend it by hand or accept that D23 sits beneath that wording.
 - **Basemap tiles need internet.** Verified offline: tiles fail, markers still place, and
   the map labels itself "Basemap offline — positions are real".
 - **Wait-time model is trained on synthetic data.** It says so in the manifest, the metrics
@@ -103,6 +103,4 @@ second-guessed:
 
 ## Next
 
-1. Re-verify `make dev` (compose) — the only unverified path, and **mandatory before
-   Phase 2** by the owner's decision.
-2. Then Phase 2, top of the list in `docs/PLAN.md`.
+Phase 2, from the top of `docs/PLAN.md`.

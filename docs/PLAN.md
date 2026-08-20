@@ -5,7 +5,7 @@ Work strictly top-to-bottom within a phase. Do not start a phase until the previ
 ## Phase 0 — Foundation (target: ~1 week part-time)
 
 - [x] Monorepo scaffold per CLAUDE.md layout; Makefile with all targets (stub ok)
-- [x] `infra/docker-compose.yml`: postgres, redis, backend (hot reload), frontend (Vite dev) — verified up on 2026-08-20 (five containers then; couchdb since removed, D23). *Not re-verified since `libgomp1` + `../ml:/ml:ro` were added — deferred by decision, demo runs on `dev-local`.*
+- [x] `infra/docker-compose.yml`: postgres, redis, backend (hot reload), frontend (Vite dev) — verified up on 2026-08-20 (five containers then; couchdb since removed, D23). **Re-verified 2026-08-21** with `libgomp1` + `../ml:/ml:ro`: migrations run to `0003`, `metrics/models` reports `loaded: true` (XGBoost finds libgomp), login works, and `make demo-check` is 8/8 against the containers (`OPTIMAL` 233 ms). Stop brew postgres/redis first — compose publishes 5432/6379 and will not bind otherwise. First build pulls ~500 MB (xgboost drags in `nvidia-nccl-cu12`) and takes ~10 min; afterwards the `.venv` volume makes it fast.
 - [x] FastAPI skeleton: settings via pydantic-settings, `/api/v1/health`, error handling, CORS
 - [x] Alembic initialized; migration 0001 = full schema from `docs/SCHEMA.md`
 - [x] Auth: JWT, roles (admin, doctor, staff, patient); seed admin user
