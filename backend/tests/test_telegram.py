@@ -123,17 +123,13 @@ def test_start_asks_for_a_language_before_anything_else(client):
 # ------------------------------------------------------------------ delivery
 
 
-def test_a_linked_patient_is_reached_on_telegram_before_sms(client, phone, admin_token):
-    """Telegram leads the channel order because it is free; SMS costs money per send."""
+def test_a_linked_patient_gets_the_code_on_telegram_without_asking(client, phone, admin_token):
+    """They linked the chat for exactly this, and an SMS needs a gateway this
+    deployment does not have — a code nobody receives is not a login."""
     client.portal.call(telegram_link.link_contact, CHAT, phone)
 
     auth = {"Authorization": f"Bearer {admin_token}"}
-    assert (
-        client.post(
-            "/api/v1/auth/otp/request", json={"phone": phone, "via": "telegram"}
-        ).status_code
-        == 200
-    )
+    assert client.post("/api/v1/auth/otp/request", json={"phone": phone}).status_code == 200
     latest = next(
         r
         for r in client.get("/api/v1/notifications?limit=5", headers=auth).json()
@@ -327,3 +323,15 @@ def test_cancel_with_nothing_booked_says_so(client, phone):
     send(client, http, NEW_CHAT, text="आशा देवी")
     send(client, http, NEW_CHAT, text="CANCEL")
     assert "रद्द करने के लिए" in http.texts()[-1], "and in their language, not ours"
+
+
+def test_sms_can_still_be_forced_for_anyone_who_wants_the_fallback(client, phone, admin_token):
+    client.portal.call(telegram_link.link_contact, CHAT, phone)
+    auth = {"Authorization": f"Bearer {admin_token}"}
+    client.post("/api/v1/auth/otp/request", json={"phone": phone, "via": "sms"})
+    latest = next(
+        r
+        for r in client.get("/api/v1/notifications?limit=5", headers=auth).json()
+        if r["template"] == "otp"
+    )
+    assert latest["channel"] == "SMS"

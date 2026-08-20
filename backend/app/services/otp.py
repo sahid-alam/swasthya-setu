@@ -73,11 +73,18 @@ async def _within_rate_limit(kind: str, value: str) -> bool:
 
 
 def _otp_channel(kind: str, via: str | None, patient: Patient) -> Channel:
-    """Where this one code goes. Telegram only if they asked for it and linked a chat;
-    silently downgrading to SMS would be cheaper and would also be a surprise."""
+    """Where this one code goes — exactly one place, never a fan-out.
+
+    A linked Telegram chat wins over SMS for a phone login. The patient linked it for
+    precisely this, the bot said so when they did, and it is free, instant and actually
+    delivered — where an SMS needs a gateway this deployment does not have. `via=sms`
+    forces the old behaviour for anyone who wants to see the fallback.
+    """
     if kind == "email":
         return Channel.EMAIL
-    if via == "telegram" and patient.telegram_chat_id:
+    if via == "sms":
+        return Channel.SMS
+    if patient.telegram_chat_id:
         return Channel.TELEGRAM
     return Channel.SMS
 
