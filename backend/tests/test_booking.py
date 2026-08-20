@@ -98,15 +98,20 @@ def test_booking_notifies_the_patient(client, auth, department, a_patient):
     offers = client.get(
         f"/api/v1/booking/slots?department_id={department}&limit=3", headers=auth
     ).json()
-    before = len(client.get("/api/v1/notifications?limit=500", headers=auth).json())
     r = client.post(
         "/api/v1/booking",
         headers=auth,
         json={"patient_id": a_patient, "slot_id": offers[-1]["slot_id"], "channel": "SMS"},
     )
     assert r.status_code == 201
-    after = client.get("/api/v1/notifications?limit=500", headers=auth).json()
-    assert len(after) > before, "a booking the patient is never told about is not a booking"
+
+    # Look for THIS booking's message rather than counting rows: the outbox is capped
+    # at 500 per page, so once a long-lived database passes that, a count can never
+    # grow and the test silently stops testing anything.
+    newest = client.get("/api/v1/notifications?limit=5", headers=auth).json()
+    assert any(
+        n["template"] == "booked" for n in newest
+    ), "a booking the patient is never told about is not a booking"
 
 
 def test_rescheduling_keeps_the_chain(client, auth, department, a_patient):

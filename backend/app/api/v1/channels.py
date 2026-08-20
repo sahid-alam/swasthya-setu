@@ -7,6 +7,7 @@ router only speaks our domain. The flow calls the same booking service the PWA d
 
 import hmac
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
@@ -190,6 +191,9 @@ async def _upcoming(db: AsyncSession, patient_id: uuid.UUID, spoken: bool = Fals
             .where(
                 Appointment.patient_id == patient_id,
                 Appointment.status == AppointmentStatus.BOOKED,
+                # Same bug the Telegram flow had: "upcoming" is a claim about time, and
+                # reading yesterday's slot back to a caller is how they miss today's.
+                Slot.starts_at >= datetime.now(UTC),
             )
             .order_by(Slot.starts_at)
             .limit(IVR_MAX_OPTIONS if spoken else 5)

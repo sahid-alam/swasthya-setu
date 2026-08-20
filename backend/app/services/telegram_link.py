@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from datetime import UTC, datetime
 
 import httpx
 from sqlalchemy import select, update
@@ -387,6 +388,10 @@ async def _cancel_latest(chat_id: str, session: dict, lang: str) -> list[tuple[s
                 .where(
                     Appointment.patient_id == patient.id,
                     Appointment.status == AppointmentStatus.BOOKED,
+                    # Future only. "Cancel" means the one they are about to miss, and
+                    # cancelling something that already happened frees no seat and
+                    # tells the patient we are not looking at a clock.
+                    Slot.starts_at >= datetime.now(UTC),
                 )
                 .order_by(Slot.starts_at)
                 .limit(1)
@@ -422,6 +427,7 @@ async def _list_upcoming(chat_id: str, session: dict, lang: str) -> list[tuple[s
                 .where(
                     Appointment.patient_id == patient.id,
                     Appointment.status == AppointmentStatus.BOOKED,
+                    Slot.starts_at >= datetime.now(UTC),  # "upcoming" is a claim about time
                 )
                 .order_by(Slot.starts_at)
                 .limit(5)
