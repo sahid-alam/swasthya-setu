@@ -6,6 +6,12 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("PRESENCE_SWEEP_SECONDS", "0")  # no background re-fusion mid-test
 os.environ.setdefault("JWT_SECRET", "test-secret-at-least-32-bytes-long-for-hs256")
 
+# Not setdefault — an assignment, so it beats a live flag in .env. Real credentials
+# exist on this machine, and a test suite that sends actual SMS off someone's SIM is a
+# test suite nobody can run twice (CLAUDE.md §Conventions, live SMS).
+for _flag in ("SMS_MOCK_MODE", "TELEGRAM_MOCK_MODE", "EMAIL_MOCK_MODE", "WHATSAPP_MOCK_MODE"):
+    os.environ[_flag] = "true"
+
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 

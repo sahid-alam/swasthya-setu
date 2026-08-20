@@ -72,6 +72,15 @@ If a request seems to require one of these, stop and flag it in chat instead of 
 - DB: schema changes only via Alembic migrations; `docs/SCHEMA.md` updated in the same commit
 - Tests: every service function gets a unit test; every Tier 1 flow gets one end-to-end test
 - Commits: `feat|fix|chore(scope): message` — small and frequent
+- **Live SMS is for humans, not for code.** Real sends go through one handset on one SIM
+  with a real bill, so: automated tests always run against the mock even when live
+  credentials sit in `.env` (`tests/conftest.py` forces every `*_MOCK_MODE` to true);
+  `make demo-check` refuses to run against a server with SMS live; never loop or
+  bulk-send through the real gateway, and load tests are mock-only. `sms_real.py`
+  enforces a hard ceiling of 30 sends/day and 5/minute counted in Redis — over it, the
+  attempt is logged as FAILED with the reason and nothing is sent. Flipping
+  `SMS_MOCK_MODE=false` is a deliberate act for a manual check or a live demo, and it
+  gets flipped back.
 
 ## Workflow every session
 

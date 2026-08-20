@@ -19,6 +19,12 @@ from app.models import NotificationStatus
 
 OK = (NotificationStatus.SENT, NotificationStatus.DELIVERED, NotificationStatus.FAILED)
 
+# Live cases send real messages to real people, so they are opt-in per run rather than
+# "on because credentials exist". SMS has no live case at all: it costs money and rides
+# one handset (CLAUDE.md §Conventions). Verify that one by hand, deliberately.
+LIVE = os.environ.get("LIVE_CONTRACT_TESTS") == "1"
+
+
 CASES = [
     pytest.param(MockSms, "9418000001", id="sms-mock"),
     pytest.param(MockWhatsApp, "9418000001", id="whatsapp-mock"),
@@ -26,24 +32,20 @@ CASES = [
     pytest.param(MockTelegram, "987654321", id="telegram-mock"),
 ]
 
-if os.environ.get("TELEGRAM_BOT_TOKEN") and os.environ.get("TELEGRAM_TEST_CHAT_ID"):
+if LIVE and os.environ.get("TELEGRAM_BOT_TOKEN") and os.environ.get("TELEGRAM_TEST_CHAT_ID"):
     from app.adapters.telegram_real import TelegramBot
 
     CASES.append(pytest.param(TelegramBot, os.environ["TELEGRAM_TEST_CHAT_ID"], id="telegram-real"))
 
-if os.environ.get("SMS_GATEWAY_URL") and os.environ.get("SMS_TEST_RECIPIENT"):
-    from app.adapters.sms_real import GatewaySms
 
-    CASES.append(pytest.param(GatewaySms, os.environ["SMS_TEST_RECIPIENT"], id="sms-real"))
-
-if os.environ.get("WHATSAPP_TOKEN") and os.environ.get("WHATSAPP_PHONE_NUMBER_ID"):
+if LIVE and os.environ.get("WHATSAPP_TOKEN") and os.environ.get("WHATSAPP_PHONE_NUMBER_ID"):
     from app.adapters.whatsapp_real import CloudApiWhatsApp
 
     CASES.append(
         pytest.param(CloudApiWhatsApp, os.environ["WHATSAPP_TEST_RECIPIENT"], id="whatsapp-real")
     )
 
-if os.environ.get("SMTP_HOST") and os.environ.get("SMTP_USERNAME"):
+if LIVE and os.environ.get("SMTP_HOST") and os.environ.get("SMTP_USERNAME"):
     from app.adapters.email_smtp import SmtpEmail
 
     CASES.append(pytest.param(SmtpEmail, os.environ["SMTP_USERNAME"], id="email-real"))
@@ -194,3 +196,58 @@ def test_being_outside_the_24_hour_window_is_not_retried_and_says_what_to_do(cli
 
 async def _no_wait(_seconds):
     return None
+
+
+# ------------------------------------------------------- the real-SMS rate ceiling
+#
+# There is no live SMS case above and there never will be. What is testable without
+# sending anything is the guard that stands in front of the gateway.
+
+
+def test_the_real_sms_ceiling_is_a_hard_stop(client, monkeypatch):
+    """30/day and 5/minute, counted in Redis. A replan that moves forty patients must
+    not be able to put forty messages through a phone in someone's pocket."""
+    from datetime import UTC, datetime
+
+    from app import events
+    from app.adapters import sms_real
+
+    minute = datetime(2031, 4, 5, 6, 7, tzinfo=UTC)
+
+    async def _drain():
+        for key, _, _ in sms_real._limit_keys(minute):
+            await events.client().delete(key)
+
+    client.portal.call(_drain)
+    try:
+        allowed = [
+            client.portal.call(lambda: sms_real.over_limit(minute))
+            for _ in range(sms_real.MAX_PER_MINUTE)
+        ]
+        assert allowed == [None] * sms_real.MAX_PER_MINUTE
+
+        refused = client.portal.call(lambda: sms_real.over_limit(minute))
+        assert refused and "per minute" in refused
+    finally:
+        client.portal.call(_drain)
+
+
+def test_over_the_ceiling_is_a_failed_row_not_an_exception(client, monkeypatch):
+    """The caller degrades: a refused send is recorded in the outbox with the reason,
+    so the demo shows why nothing arrived instead of appearing to have sent."""
+    from app.adapters import sms_real
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "sms_gateway_url", "http://127.0.0.1:9", raising=False)
+
+    async def _always_full(_now=None):
+        return "real-SMS rate limit reached (test); not sent"
+
+    monkeypatch.setattr(sms_real, "over_limit", _always_full)
+    result = client.portal.call(
+        lambda: sms_real.GatewaySms().send(
+            to="9418000001", template="otp", params={"code": "1", "minutes": 5}
+        )
+    )
+    assert result.status is NotificationStatus.FAILED
+    assert "rate limit" in result.error

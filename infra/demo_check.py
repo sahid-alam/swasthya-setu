@@ -44,14 +44,20 @@ def psql(sql):
 
 async def main():
     a = Setu()
+
+    # Iron Rule 4 guard, and a wallet guard: the spine moves ~40 patients, so running
+    # it against a live SMS gateway would put forty real messages through someone's
+    # handset. Live SMS is for deliberate manual verification only.
+    mocks = a.http.get("/api/v1/health").json().get("mocks", {})
+    if mocks.get("sms") is False:
+        print("REFUSING: the server has SMS in live mode. Set SMS_MOCK_MODE=true.")
+        sys.exit(2)
     tok = a.http.headers["Authorization"].split()[1]
     doc = next(d for d in a.roster()["doctors"] if d["badge_id"] == "HP-DOC-1001")
     did = doc["doctor_id"]
 
     before = next(
-        c
-        for c in a.http.get("/api/v1/scheduling/clinic").json()
-        if c["badge_id"] == "HP-DOC-1001"
+        c for c in a.http.get("/api/v1/scheduling/clinic").json() if c["badge_id"] == "HP-DOC-1001"
     )
     report("clinic list seeded", before["booked"] > 0, f"{before['booked']} waiting")
 
@@ -68,18 +74,14 @@ async def main():
     ).split("|")
 
     topics = []
-    async with websockets.connect(
-        f"ws://localhost:8000/ws/dashboard?token={tok}"
-    ) as ws:
+    async with websockets.connect(f"ws://localhost:8000/ws/dashboard?token={tok}") as ws:
         assert json.loads(await ws.recv())["topic"] == "ws.ready"
         await asyncio.get_event_loop().run_in_executor(
             None, lambda: a.override(did, "ON_LEAVE", "demo-check: called in sick")
         )
         try:
             while len(topics) < 2:
-                topics.append(
-                    json.loads(await asyncio.wait_for(ws.recv(), timeout=10))["topic"]
-                )
+                topics.append(json.loads(await asyncio.wait_for(ws.recv(), timeout=10))["topic"])
         except TimeoutError:
             pass
 
@@ -122,13 +124,9 @@ async def main():
     )
 
     after = next(
-        c
-        for c in a.http.get("/api/v1/scheduling/clinic").json()
-        if c["badge_id"] == "HP-DOC-1001"
+        c for c in a.http.get("/api/v1/scheduling/clinic").json() if c["badge_id"] == "HP-DOC-1001"
     )
-    report(
-        "absent doctor holds nobody", after["booked"] == 0, f"{after['booked']} waiting"
-    )
+    report("absent doctor holds nobody", after["booked"] == 0, f"{after['booked']} waiting")
 
     # The last hop: what the patient app serves that patient now. Either she has been
     # moved to another doctor, or she is RESCHEDULE_PENDING — both are honest, and the
@@ -137,18 +135,13 @@ async def main():
     # leaves the old one RESCHEDULED, so follow `rescheduled_from` rather than
     # expecting the old id to survive.
     pid, appt_id, absent_name = victim
-    successor = psql(
-        f"select id from appointments where rescheduled_from = '{appt_id}'"
-    )
+    successor = psql(f"select id from appointments where rescheduled_from = '{appt_id}'")
     mine = a.http.get(f"/api/v1/pwa/my-queue/{pid}").json()
     entry = next((m for m in mine if m["appointment_id"] in (successor, appt_id)), None)
     report(
         "patient PWA shows the new slot (or a labelled pending one)",
         entry is not None
-        and (
-            entry["doctor_name"] != absent_name
-            or entry["status"] == "RESCHEDULE_PENDING"
-        ),
+        and (entry["doctor_name"] != absent_name or entry["status"] == "RESCHEDULE_PENDING"),
         (
             f"{entry['status']} with {entry['doctor_name']} at {entry['scheduled_for'][11:16]}"
             if entry
