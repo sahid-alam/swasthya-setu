@@ -155,11 +155,41 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
 - [ ] Bhashini voice booking (constrained intent flow, mock mode + sandbox)
 - [ ] Outbound TTS reschedule calls (mock mode)
 - [ ] Kiosk mode skin for PWA
-- [ ] Bed management: inventory, states, occupancy dashboard
-- [ ] Referral reservation flow with expiry (M5 accept scenario)
-- [ ] e-RaktKosh ingest job + blood widget (real snapshot + labeled fallback)
+- [x] Bed management: inventory, states, occupancy dashboard — `services/beds.py`,
+  `/api/v1/beds*`, `/beds` screen. 159 beds across 21 wards, seeded by
+  **`make seed-facilities`**, which is additive and idempotent on purpose: `app.seed`
+  truncates `patients` and would kill a live Telegram link, and bed inventory has
+  nothing to do with patients. `reserve()` takes its bed `FOR UPDATE SKIP LOCKED`, so
+  two referrals racing for the last ICU bed cannot both win. A bed held by a referral
+  cannot be moved by hand — the API names the referral and tells you to cancel it.
+- [x] Referral reservation flow with expiry (M5 accept scenario) — `services/referrals.py`,
+  `/referrals` screen with a live countdown. **Expiry is a real background sweeper**
+  (`REFERRAL_SWEEP_SECONDS`, 60s), not lazy evaluation on read: a hold that only
+  releases when someone remembers to click cancel is how a district hospital comes to
+  believe an ICU bed exists in Shimla that was given away three hours ago. Two things
+  the tests pin — expiry releases the bed AND the reserved slot together, and
+  confirming a hold that expired a second ago does not resurrect it, because that bed
+  may already belong to someone else. No free bed leaves the referral REQUESTED rather
+  than failing: the receiving hospital should still see that someone needs to send them
+  a patient.
+- [ ] e-RaktKosh ingest job + blood widget (real snapshot + labeled fallback) — **not
+  built.** `make seed-facilities` writes SYNTHETIC blood stock and every row carries its
+  `source` for the §9d chip, because M8's ranking needs a blood input and a number with
+  no provenance in front of a judge is worse than no number. The real ingest adapter is
+  still to do.
 - [ ] Prophet footfall model on HMIS data + backtest chart endpoint
-- [ ] Golden Hour Router: OSRM container with HP extract, ranking service, map UI
+- [x] Golden Hour Router: ranking service + map UI — `services/routing.py`,
+  `POST /api/v1/emergency/rank`, `/golden-hour` screen. Ranks in **35-56 ms** against a
+  3 s budget. Every facility is returned and persisted to `route_rankings` with its
+  reasons, ruled-out ones included, so the demo replays and the ranking can be
+  questioned. `viable` is specialist>0 AND a free bed — deliberately not capability>0,
+  or beds and blood carry a hospital with nobody to operate to the top.
+  **D15 is enforced here or the demo is dishonest**: unknown presence scores 0.5, not 0,
+  and says "on the roster but presence unknown — not confirmed at the bedside".
+  **OSRM container not built** — `OSRM_MOCK_MODE` defaults true and the offline
+  estimator (haversine x 2.2 winding factor, 38 km/h) is what runs; it puts Rampur-Shimla
+  at 127 km where the real road is ~130. `osrm_real.py` exists and degrades to the
+  estimator rather than failing a ranking; `OSRM_BASE_URL` switches it on.
 - [ ] Integration backbone: adapter interfaces + mocks for ABDM/eSanjeevani/108/e-Hospital; one live ABDM sandbox call
 
 **Exit:** each Tier 2 module passes its PRD accept scenario independently.

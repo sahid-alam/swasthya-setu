@@ -87,3 +87,18 @@ export function timeLeft(expiresAt: string | null): string | null {
   if (minutes < 60) return `${minutes} min left`;
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m left`;
 }
+
+export type PatientPick = { id: string; name: string; phone: string };
+
+export const searchPatients = (q: string) =>
+  api<PatientPick[]>(`/patients/search?q=${encodeURIComponent(q)}&limit=20`);
+
+export const createReferral = (body: {
+  from_hospital_id: string;
+  to_hospital_id: string;
+  patient_id: string;
+  specialty: string;
+  urgency: string;
+  notes?: string;
+}) =>
+  api<Referral>("/referrals", { method: "POST", body: JSON.stringify(body) });

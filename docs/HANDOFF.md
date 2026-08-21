@@ -5,11 +5,12 @@ Everything below is state a fresh session cannot infer from the code in reasonab
 
 ## Status
 
-**Phase 0 and Phase 1 are complete; Phase 2 is well under way.** 38 of 54 plan items
-ticked. Migrations are at `0006`.
+**Phase 0 and Phase 1 are complete; Phase 2 is well under way.** 42 of 54 plan items
+ticked. Migrations are at `0006` — M5/M8 needed **no new migration**, the tables were
+already in `0001` from SCHEMA.md.
 
-- **182 backend tests, 18 frontend tests**, `make lint` clean, suite stable across repeat runs
-- `make demo-check` is **8/8** — the Iron Rule 4 guard; run it after anything touching the spine.
+- **200 backend tests, 18 frontend tests**, `make lint` clean, suite stable across repeat runs
+- `make demo-check` is **12/12** — the Iron Rule 4 guard; run it after anything touching the spine.
   **It no longer needs a fresh `make seed`.** It used to target one fixed badge
   (`HP-DOC-1001`), drain him and leave him `ON_LEAVE`, so a second run found nobody to
   move and reported a broken spine that was fine. It now picks, from live data, the
@@ -150,8 +151,17 @@ state rather than leaning on the seed or on test order.
 - **Basemap tiles need internet.** Verified offline: tiles fail, markers still place, and
   the map labels itself "Basemap offline — positions are real".
 - **"surge" scenario not built** — five scenarios shipped.
-- Kiosk skin (§9c), Bhashini, outbound TTS, beds, referrals, blood, Prophet, Golden
-  Hour: the rest of Phase 2, untouched.
+- **Beds (M5), referrals (M5) and Golden Hour (M8) are built** — `/beds`, `/referrals`,
+  `/golden-hour`, seeded by the additive `make seed-facilities`. The PRD's scripted
+  scenario now runs end to end.
+- **No OSRM container.** `OSRM_MOCK_MODE` defaults true; drive times are haversine x 2.2
+  at 38 km/h, which puts Rampur-Shimla at 127 km against a real ~130. Every card on the
+  screen says "Drive time estimated". `osrm_real.py` exists and degrades to the
+  estimator rather than failing a ranking.
+- **Blood stock is SYNTHETIC** and every row carries its source. The e-RaktKosh ingest
+  (M6) is not built; those rows exist only because M8's ranking needs a blood input.
+- Kiosk skin (§9c), Bhashini, outbound TTS, e-RaktKosh, Prophet: the rest of Phase 2,
+  untouched.
 
 ## Next
 

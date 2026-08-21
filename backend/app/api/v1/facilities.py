@@ -212,6 +212,34 @@ async def list_referrals(
     return [await _describe(db, r) for r in rows]
 
 
+class PatientPick(BaseModel):
+    id: str
+    name: str
+    phone: str
+
+
+@router.get("/patients/search", response_model=list[PatientPick])
+async def search_patients(
+    q: str = Query("", max_length=60),
+    limit: int = Query(20, le=50),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(STAFF),
+) -> list[PatientPick]:
+    """Staff-only patient picker for the referral form.
+
+    Deliberately not a public directory: it is behind the staff role, capped, and
+    returns nothing but what is needed to name a referral's subject.
+    """
+    stmt = select(Patient).order_by(Patient.name).limit(limit)
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(Patient.name.ilike(like) | Patient.phone.ilike(like))
+    return [
+        PatientPick(id=str(p.id), name=p.name, phone=p.phone)
+        for p in (await db.execute(stmt)).scalars().all()
+    ]
+
+
 class ReferralIn(BaseModel):
     from_hospital_id: uuid.UUID
     to_hospital_id: uuid.UUID

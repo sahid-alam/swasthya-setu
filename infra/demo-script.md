@@ -1,7 +1,7 @@
 # Presenter runbook — the spine, end to end
 
-Phase 1 scope: presence (M1) → allocation (M2) → access (M3) → command centre (M4).
-No Docker, no hardware, no internet needed.
+Presence (M1) → allocation (M2) → access (M3) → command centre (M4) → Golden Hour (M8)
+and referral reservation (M5). No Docker, no hardware, no internet needed.
 
 ## Start (three terminals, ~30 seconds)
 
@@ -22,20 +22,31 @@ PRESENCE_SWEEP_SECONDS=5 SIM_SPEED=12 \
 cd frontend && npm run dev
 ```
 
+```bash
+# 4. beds + blood, once. Additive and idempotent, and deliberately NOT part of
+#    `make seed` — that truncates `patients`, which kills a live Telegram link.
+make seed-facilities
+```
+
 Reset to a clean stage at any point with `make migrate seed` (deterministic —
-the same 3 hospitals, 30 doctors and 200 patients every single time).
+the same 3 hospitals, 30 doctors and 200 patients every single time), then
+`make seed-facilities` to put the 159 beds back.
 
 **Before you walk on stage, run the guard:**
 
 ```bash
-make seed && make demo-check          # 8/8 PASS, about six seconds
+make demo-check          # 12/12 PASS, about ten seconds
 ```
 
-It walks the whole spine headless: presence flip → CP-SAT replan → notification
-fan-out → what the patient app is served. If it is not 8/8, do not start; the number
-it prints for `plan_runs` is the same number you are about to claim on stage.
-(Verified 3× consecutively on 2026-08-20: OPTIMAL in 156 / 196 / 164 ms, 39 patients
-moved each time.)
+It walks the whole scripted scenario headless: presence flip → CP-SAT replan →
+notification fan-out → what the patient app is served → Golden Hour ranking → referral
+with a bed reservation. If it is not 12/12, do not start; the number it prints for
+`plan_runs` is the same number you are about to claim on stage.
+
+**It no longer needs a `make seed` first.** It picks a doctor from live data — one who
+has a clinic AND an available colleague to re-seat it onto — and restores his presence
+state and releases its referral hold when it finishes. Verified 3× consecutively on
+2026-08-21, 12/12 each, no seed between runs.
 
 Several commands below use a staff token. Get one once, in the terminal you will
 type into:
@@ -59,10 +70,14 @@ choose one.
 | `/queue` | queues with predicted waits |
 | `/alerts` | roster-vs-presence mismatches, overflow, pending rebookings |
 | `/map` | Leaflet network map |
+| `/beds` | bed occupancy per ward (M5) |
+| `/referrals` | referral holds with a live expiry countdown (M5) |
+| `/golden-hour` | emergency facility ranking (M8) |
 | `/scenarios` | the presenter's remote control (admin only) |
 | `/events` | raw WebSocket feed, if a judge wants the plumbing |
 | `/patient` | patient sign-in by phone OTP |
 | `/book` | the patient app itself |
+| `/my-queue` | the patient's own place in the queue |
 
 Open <http://localhost:5173> and sign in as staff. Keep a second browser window
 (or a phone-sized window) on `/patient` for Part 3.
@@ -365,9 +380,16 @@ curl -s "localhost:8000/api/v1/pwa/my-queue/$PID" -H "Authorization: Bearer $TOK
 
 New doctor, new time, `position` and `predicted_wait_minutes`.
 
-> **Honest note, say it if asked:** the patient's *queue-position screen* is not built —
-> the endpoint is, the messages are, and `make demo-check` asserts on it. Show the
-> message, not a screen.
+Then show her the screen, not just the message: `/my-queue` in the patient window.
+
+> "This is what she opens. Her number in the line, how many people are ahead of her as
+> dots she can count without reading, and the estimated wait. If we have already moved
+> her it says so; if we are still finding her a slot it says *that*, rather than showing
+> a confident time we do not have."
+
+> **Honest note:** the wait figure is the SYNTHETIC-trained model from step 9. The screen
+> calls it an estimate in the patient's own language rather than wearing a SYNTHETIC chip
+> — that chip is a signal for you and the judges, not for someone in a corridor.
 
 ## Part 4 — command centre (M4)
 
@@ -406,6 +428,70 @@ rebooking. Every one names the evidence and the number of patients behind it.
 
 ("surge" is not built — five scenarios shipped. Say so if someone asks for a sixth.)
 
+## Part 5 — Golden Hour and referral (M8, M5)
+
+The last two beats of the scripted scenario in `docs/PRD.md §Demo requirements`.
+
+### 21. "Accident on NH-5 near Rampur" — *PRD M8 accept* (60s)
+
+`/golden-hour`. The incident starts on Rampur; click anywhere on the map to move it.
+Choose **General Surgery** and **O−**, then **Rank facilities**.
+
+> "Three facilities, ranked in about forty milliseconds against a three-second budget.
+> And every one of them tells you why it is where it is."
+
+Read one card aloud — the reasoning is the deliverable, not the order:
+
+> "IGMC: a hundred and twenty-seven kilometres by road, ten free beds, five units of
+> O-negative. And this line — *on the roster but presence unknown, not confirmed at the
+> bedside*. We are not claiming the surgeon is there. We are claiming we cannot see him,
+> which is a different sentence, and the ranking scores it in the middle rather than
+> pretending either way."
+
+Now switch the specialty to **Neurosurgery** and rank again. All three go grey:
+
+> "Ruled out — *no Neurosurgery department here*. Not hidden, not dropped off the
+> bottom. A ranking that silently omits a hospital cannot be questioned, so the ones it
+> rejects stay on the screen with the reason."
+
+Two labels to point at before anyone asks:
+- **"Decision support — not 108 dispatch."** Nothing here moves a vehicle.
+- **"Drive time estimated — no OSRM."** See §22.
+
+### 22. "Are those real drive times?" (30s)
+
+Say no first.
+
+> "No. There is no OSRM container running, so those are estimates — straight-line
+> distance times a winding factor of 2.2, at thirty-eight kilometres an hour. The factor
+> is measured against three real Himachal road pairs, and it puts Rampur to Shimla at a
+> hundred and twenty-seven kilometres where the road is about a hundred and thirty. The
+> adapter for real OSRM is written and one environment variable switches it on. Until
+> someone does that, the screen says the number is estimated — on every single card."
+
+`GET /api/v1/health` reports `"osrm": true` alongside the messaging adapters, so this
+is checkable rather than a claim.
+
+### 23. Referral with a bed reservation — *PRD M5 accept* (60s)
+
+`/referrals`.
+
+> "Mandi wants to send a trauma case to Shimla. Placing the referral holds an actual
+> ICU bed at the destination — not a note in a WhatsApp group, a row that moves that bed
+> out of Shimla's free count the moment it is taken."
+
+Open `/beds` in a second tab and show the destination's free count drop by one, then
+come back. Point at the countdown on the row:
+
+> "Two hours, ticking. This is the part that matters. A reservation that only releases
+> when somebody remembers to cancel it is how a district hospital comes to believe there
+> is an ICU bed in Shimla that was given away three hours ago. So the hold expires on a
+> timer, on the server, whether or not anyone has this screen open — and when it does,
+> the bed and the specialist's slot are released together."
+
+If someone asks what happens on a race: confirming a hold that expired a second ago is
+refused, not resurrected. That bed may already belong to someone else.
+
 ## Optional: a whole day in two minutes
 
 ```bash
@@ -427,17 +513,18 @@ means every rehearsal is identical.
 | Patient app shows staff data | One browser window, two tokens. Use a second window (or private tab) for `/patient`. |
 | WhatsApp replies loop back to the menu | The session TTL expired between turns. `wa book` and walk it again. |
 | `InvalidCachedStatementError` | You ran a migration against a live backend. Restart uvicorn. |
-| Anything at all, before you present | `make seed && make demo-check`. 8/8 or do not start. |
+| Beds screen empty | `make seed-facilities`. It is additive — running it twice is a no-op. |
+| Anything at all, before you present | `make demo-check`. **12/12** or do not start. It no longer needs a re-seed first. |
 
 ## What is NOT built yet (say so if asked)
 
-Phase 1 is complete, and IVR (§15) is the first Phase 2 module. Still untouched:
-Bhashini voice booking, outbound TTS reschedule calls, the kiosk skin, bed management,
-referral reservations, the e-RaktKosh blood widget, the Prophet footfall forecast, the
-Golden Hour router, and the ABDM/eSanjeevani/108/e-Hospital adapter backbone.
+Phase 1 is complete. Bed management, referral reservation and the Golden Hour router
+(§21–§23) are built. Still untouched: Bhashini voice booking, outbound TTS reschedule
+calls, the kiosk skin, the **e-RaktKosh ingest** (blood stock is seeded SYNTHETIC and
+every row says so), the Prophet footfall forecast, and the ABDM/eSanjeevani/108/
+e-Hospital adapter backbone. The **OSRM container is not built** either — see §22.
 
-The patient queue-position screen (§16) and a "surge" scenario (§20) are the two gaps
-inside Phase 1. `make dev` (docker compose) is verified and 8/8, but **present from
+A "surge" scenario (§20) is the remaining gap inside Phase 1. `make dev` (docker compose) is verified and 8/8, but **present from
 `dev-local`** — it starts in seconds, and it is what this runbook describes and what was
 rehearsed. (There is no live phone line either: IVR runs in mock telephony, which is the
 point of `TELEPHONY_MOCK_MODE`.)
