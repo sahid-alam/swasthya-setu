@@ -14,6 +14,7 @@ import Scenarios from "./routes/Scenarios";
 import PresenceBoard from "./routes/PresenceBoard";
 import DevUI from "./routes/DevUI";
 import Login from "./routes/Login";
+import MyQueue from "./routes/MyQueue";
 import PatientLogin from "./routes/PatientLogin";
 import "./styles/tokens.css";
 
@@ -48,6 +49,15 @@ createRoot(document.getElementById("root")!).render(
             element={
               <RequireAuth>
                 <Book />
+              </RequireAuth>
+            }
+          />
+          {/* Patient surface, so no Shell: the dark dock is command-centre chrome (§9a). */}
+          <Route
+            path="/my-queue"
+            element={
+              <RequireAuth>
+                <MyQueue />
               </RequireAuth>
             }
           />

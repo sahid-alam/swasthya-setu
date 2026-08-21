@@ -51,10 +51,13 @@ Order matters: presence → optimizer → one channel → dashboard, then widen.
   **Not PouchDB**: localStorage + REST replay, ARCHITECTURE D23 supersedes D6.
   Patient phone-OTP login now exists (`/patient`) — reuses the mock SMS adapter and the
   existing JWT, no new auth service. Staff/kiosk operation still works unchanged.
-  **Queue position is API-only.** `/api/v1/me/queue` and `/api/v1/pwa/my-queue/{id}`
-  serve position + predicted wait and `demo-check` asserts on them, but no PWA screen
-  renders it (the `myQueue` / `positionLabel` strings sit unused in `lib/i18n.ts`).
-  The patient's visible proof of a reschedule is the notification, not a screen.
+  **Queue position now has a screen** — `/my-queue` (`routes/MyQueue.tsx`), reached from
+  the booking confirmation. Renders four states off `/api/v1/me/queue`: waiting (big
+  position + countable "people ahead" dots + predicted wait), your-turn (the backend
+  nulls `position` once the slot passes — never "number null"), reschedule-pending, and
+  empty. Polls every 20 s; `/ws/dashboard` is staff- and hospital-scoped, so not used.
+  Staff/kiosk tokens fall back to `/pwa/my-queue/{id}`, mirroring how `Book.tsx` branches.
+  So a reschedule is now visible on a screen, not only in the notification.
 - [x] WhatsApp adapter (mock mode default) with guided flow
 - [x] SMS adapter (mock mode default): confirmations + reschedule notices
 - [x] Notification service consuming reschedule events → channel fan-out with delivery log

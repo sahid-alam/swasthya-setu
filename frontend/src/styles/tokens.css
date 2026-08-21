@@ -136,6 +136,15 @@ body {
   font-feature-settings: "tnum";
 }
 
+/* A patient-facing quantity at display size. Stays DM Sans on purpose: §9b makes
+   mono micro-text staff decoration, never an information carrier for a patient,
+   and §7.1's contrast of scale is what makes this readable across a waiting room. */
+.num-hero {
+  font-feature-settings: "tnum";
+  letter-spacing: -0.04em;
+  line-height: 0.94;
+}
+
 /* §9a projector rule: presence states, queue counts and alerts stay readable
    from ~3m. Overrides §6's 11px chip text wherever a chip carries live state. */
 .live-state {

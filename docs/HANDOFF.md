@@ -127,10 +127,9 @@ state rather than leaning on the seed or on test order.
 
 ## Honest gaps — say these out loud, do not paper over them
 
-- **The PWA has no queue-position screen.** `/api/v1/me/queue` serves position and
-  predicted wait, `demo-check` asserts on it, the i18n strings (`myQueue`,
-  `positionLabel`) sit unused — nothing renders them. What a patient sees after a
-  reschedule is the notification. **This is the most obvious piece of UI work left.**
+- ~~The PWA has no queue-position screen.~~ **Built 2026-08-21** — `/my-queue`
+  (`routes/MyQueue.tsx`), linked from the booking confirmation. A reschedule is now
+  visible on a screen, not only in the notification.
 - **The Vapi call button has never been used.** Gated on `VITE_VAPI_*`; unset, it says so
   and Vite drops the 300 kB SDK from the bundle entirely.
 - **Wait-time model is trained on synthetic data.** It says so in the manifest, the

@@ -22,6 +22,39 @@ export function Eyebrow({
   );
 }
 
+/* --- PWA header (§9b) ------------------------------------------------------
+   The wordmark keeps the eyebrow's signature dash but sets the name in sans:
+   JetBrains Mono carries no Devanagari, so a mono wordmark silently falls back
+   to a broken face the moment the patient picks Hindi. §9b also makes mono
+   micro-caps staff decoration rather than patient-facing text. */
+
+export function PwaHeader({
+  appName,
+  switchLabel,
+  onSwitch,
+}: {
+  appName: string;
+  switchLabel: string;
+  onSwitch: () => void;
+}) {
+  return (
+    <header className="flex items-center justify-between">
+      <span className="inline-flex items-center gap-2">
+        <span className="h-px w-[22px] bg-muted-2" aria-hidden />
+        <span className="text-[15px] font-medium tracking-[-0.01em] text-muted">
+          {appName}
+        </span>
+      </span>
+      <button
+        onClick={onSwitch}
+        className="min-h-[48px] rounded-sm px-4 text-[15px] text-primary underline"
+      >
+        {switchLabel}
+      </button>
+    </header>
+  );
+}
+
 /* --- Panel (§4) ----------------------------------------------------------- */
 
 export function Panel({

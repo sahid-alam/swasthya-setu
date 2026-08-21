@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
-import { Button, Chip, Eyebrow, Panel } from "../components/ui";
+import { Button, Chip, Eyebrow, Panel, PwaHeader } from "../components/ui";
 import { api, getToken, isPatient } from "../lib/api";
 import { formatWhen, getLang, setLang, t, type Lang } from "../lib/i18n";
 import { enqueue, flush, pending, type Intent } from "../lib/outbox";
@@ -146,15 +147,11 @@ export default function Book() {
 
   return (
     <main className="mx-auto max-w-[560px] px-4 py-6 text-[15px]">
-      <header className="flex items-center justify-between">
-        <Eyebrow dash>{say("appName")}</Eyebrow>
-        <button
-          onClick={toggleLang}
-          className="min-h-[48px] rounded-sm px-4 text-[15px] text-primary underline"
-        >
-          {say("switchLang")}
-        </button>
-      </header>
+      <PwaHeader
+        appName={say("appName")}
+        switchLabel={say("switchLang")}
+        onSwitch={toggleLang}
+      />
 
       {!online && (
         <Panel className="mt-4 border-warn p-4 text-[15px]">
@@ -193,6 +190,12 @@ export default function Book() {
               <strong className="tnum">{done.token_number}</strong>
             </p>
           )}
+          {/* The journey the confirmation used to dead-end: booked → where am I in line. */}
+          <Link to="/my-queue" className="mt-5 block">
+            <Button variant="accent" size="lg" className="min-h-[48px] w-full">
+              {say("seeMyPlace")}
+            </Button>
+          </Link>
         </Panel>
       ) : (
         <>

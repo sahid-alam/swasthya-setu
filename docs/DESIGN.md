@@ -193,3 +193,13 @@ One token set, **three surfaces**. Apply the system differently per surface:
 - `UNKNOWN` presence is always grey and labeled — never hide low confidence behind an optimistic color. Confidence < threshold shows the % in mono next to the chip.
 - Anything mock/synthetic visible in a demo gets a neutral chip `SIMULATED` / `SYNTHETIC DATA` (mono-caps, `--line-2`/`--muted`). Honesty is a design feature.
 - `prefers-reduced-motion`: all surfaces drop to opacity-only transitions.
+
+---
+
+## 10. Design skills
+
+`.claude/skills/` holds 15 design skills written for landing pages. This is a dashboard, a PWA and a kiosk — **this document wins every conflict.**
+
+- **Use:** `web-design-guidelines` (review only — needs network, never in `make demo`), `redesign-existing-projects` (checklist only), `apple-design` (motion only).
+- **Ignore any of them** telling you to change the fonts (§9b), the palette (§1), the dark dock sidebar (§4), the big radii (§7.3), or to add dark mode.
+- Their honest use is the pitch deck and a public landing page — not product surfaces.
