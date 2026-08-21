@@ -201,9 +201,23 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
 
 ## Phase 3 — Hardening & demo polish (target: ~2 weeks)
 
-- [ ] `make demo`: full seeded day + scripted scenario, offline, clean machine
-- [ ] `infra/demo-script.md`: presenter click-path, timings, fallback plan
-- [ ] Judge Q&A doc assembled from `/defend` outputs — `docs/judge-qa.md` started (IVR)
+- [x] `make demo`: full seeded day + scripted scenario, offline, clean machine — now
+  `migrate seed`, where `seed` also runs `app.seed_facilities`. It had to: `app.seed`
+  truncates `hospitals CASCADE` and beds/blood hang off hospitals, so every reseed
+  silently emptied them and the Golden Hour and referral beats broke with no error.
+  Verified against the live database inside a transaction: 159 beds to 0, rolled back.
+- [x] `infra/demo-script.md`: presenter click-path, timings, fallback plan — 25 acts
+  across 5 parts, every command executed rather than written from memory, with a
+  symptom/fix table and a "what is NOT built" section to read before the room.
+- [x] Judge Q&A doc assembled from `/defend` outputs — `docs/judge-qa.md`, 5 sections /
+  38 questions: IVR, presence (M1), allocation + the wait-time claim (M2), beds +
+  referrals + Golden Hour (M5/M8), and a "does this solve the problem statement?"
+  scorecard answering it in the statement's own words. Every section leads with
+  **⚠ Gaps — do not claim these** before any answer.
+  Writing it caught a real error we would have said on stage: **0.161 is the no-show
+  model's baseline Brier, not its base rate** (that is 0.2019), and the runbook had
+  repeated the misreading. Also now stated out loud that the 110k dataset is Brazilian
+  (Vitoria) because no Indian set of that size is public.
 - [x] Load sanity: 1 hospital-day replan under 5s with 3 hospitals seeded — `make
   load-check`. Replans **every** doctor in the network and reports the worst case, not
   the average, because the worst case is the one that happens in front of a judge:

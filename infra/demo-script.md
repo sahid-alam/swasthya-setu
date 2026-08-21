@@ -210,9 +210,11 @@ run is in that table — that is the "<5 seconds" claim with evidence, not a sli
 curl -s localhost:8000/api/v1/metrics/models -H "Authorization: Bearer $TOK"
 ```
 
-> "No-show is trained on the real public 110,527-appointment dataset. ROC-AUC 0.735,
-> Brier 0.143 against a 0.161 base rate. That is a real number, not a good one — anyone
-> showing you 0.95 on this dataset is leaking a feature.
+> "No-show is trained on the real public 110,527-appointment dataset — Vitoria, Brazil,
+> because no Indian no-show set of that size is public. ROC-AUC 0.735, Brier 0.143
+> against a baseline of 0.161, which is what you score by predicting the 20.2% base rate
+> for everybody. That is a real number, not a good one — anyone showing you 0.95 on this
+> dataset is leaking a feature.
 > The wait-time model has no real dataset to train on, so it is trained on simulated
 > clinic days and the API says SYNTHETIC in the response. It beats the arithmetic your
 > reception desk already does — 15 minutes of error against 27."

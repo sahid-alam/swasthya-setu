@@ -43,8 +43,9 @@ contains it. Patient login is `/patient` — phone **or** email OTP; in mock mod
 appears in the outbox at `GET /api/v1/notifications`.
 
 `make dev` (docker compose) is verified and 8/8, but the demo runs on `dev-local`:
-seconds to start instead of minutes. `infra/demo-script.md` is the presenter runbook —
-every command in it was executed, not written from memory.
+seconds to start instead of minutes. `infra/demo-script.md` is the presenter runbook (25 acts) —
+every command in it was executed, not written from memory. `docs/judge-qa.md` is the
+defence: 5 sections, 38 questions, each leading with the gaps you must not claim.
 
 ## What exists
 

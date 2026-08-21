@@ -100,3 +100,292 @@ booking, the receipt, the failure paths. It does not prove the carrier link, and
 not claim it does. The alternative — a live number — would make the demo depend on
 vendor uptime and venue signal, which is exactly the dependency Iron Rule 1 exists to
 refuse.
+
+---
+
+## Doctor presence engine (PRD §M1, Tier 1) — 2026-08-21
+
+The differentiator. Everything downstream is only as good as this.
+
+### ⚠ Gaps — do not claim these
+
+- **No real hardware has ever posted to this.** Every signal in the demo comes from
+  `simulators/`. They are HTTP clients hitting the same public `POST /api/v1/signals`
+  a real gate would, and they never touch the database — but a simulator agreeing with
+  us is not a beacon agreeing with us. Say "the ingestion contract is proven, the
+  hardware link is not".
+- **Face check-in does not extract embeddings.** The matching, the enrolment gate and
+  the privacy story are real; the InsightFace *extraction* step is not wired, and a dev
+  endpoint stands in for the camera. Never imply a camera is running.
+- **The trust and decay numbers are engineering judgement, not measurement.** `TRUST`
+  and `TAU_SECONDS` are a tuning table chosen to behave sensibly, not calibrated
+  against a real hospital. They are in one block precisely so a pilot can retune them.
+- **`SIM_SPEED=12` compresses decay for the demo.** The maths is identical; only the
+  tau constants scale. If you demo decay, say the clock is running twelve times fast.
+
+### Q&A
+
+**1. How do you actually know a doctor is present?**
+Every source posts an observation to one endpoint. Each is scored
+`trust x exp(-dt/tau)` — how much we believe that kind of signal, decayed by how long
+ago it arrived. RFID is trusted 0.9 and goes stale in three minutes; a roster entry is
+trusted 0.3 for an hour. The state with the strongest *current* evidence wins, and
+below `FLIP_THRESHOLD = 0.35` nothing is strong enough to assert anything.
+
+**2. Why not just an attendance app, or a biometric punch at the door?**
+Both tell you someone entered the building at 9 am. Neither tells you the doctor left
+OPD for theatre at 11:40, which is the fact an appointment system needs. Presence here
+is continuous and location-aware, and it decays — a punch-in is a claim about the past
+that never expires. Demo step 3 walks a doctor from OPD to theatre and the state flips
+on the theatre-door tap.
+
+**3. Ninety minutes of BLE pings in OPD, then one RFID tap at the theatre door. Why
+doesn't the OPD evidence win on volume?**
+Because a person is in exactly one place, so locations are *competing* evidence, not
+additive. Repeated sightings add at most `CORROBORATION = 0.05` each, capped at three —
+enough to firm up a belief, never enough to outvote a fresher sighting elsewhere.
+Trust decides whether a sighting is worth believing; **recency decides which believed
+sighting describes now**. Ranking on trust alone would pin the doctor to the door he
+walked through.
+
+**4. What happens when the beacon battery dies?**
+Nothing arrives, so the score decays, and at 0.35 the state stops being asserted and
+falls back to what the roster implies — labelled `ROSTER ONLY` with the confidence
+shown. It never silently stays green. That is the point of a sweeper that recomputes on
+a timer rather than only on arrival: **silence is information**, and a system that only
+reacts to messages cannot hear it.
+
+**5. The roster says on leave and your sensors say present. Who wins, and how do you
+justify that to an administrator?**
+The building wins, and the drawer shows both. A roster is a plan written yesterday; a
+badge tap is an observation from a minute ago. But the disagreement is surfaced as an
+alert rather than hidden — `/alerts` names "rostered but absent" with the confidence —
+because the interesting cases are exactly the ones where the paperwork and the building
+disagree.
+
+**6. Prove it. What do I run, and how do I know you did not just write to the database?**
+`simulators/scenario.py arrives HP-DOC-1001` against a running stack; the board changes
+with no refresh. The simulators are HTTP clients with no database credentials — they
+post to the same public endpoint real hardware would. Then click **evidence** on the
+row: every state carries its receipts, the source, the score and the age in seconds.
+
+**7. Can I trick it? A doctor leaves their badge on the desk and goes home.**
+Yes, and we do not pretend otherwise. That is why an admin override outranks every
+sensor and is recorded with who set it and why, and why the highest-trust source is
+`MANUAL` at 1.0. Multi-signal fusion raises the cost of gaming it — a badge on a desk
+does not also pass a face kiosk — but no passive system is proof against a determined
+human, and claiming otherwise would be the overclaim.
+
+**8. Privacy. You are tracking doctors around a building.**
+Zone-level, not coordinates: "in OPD-2", never a path. Face check-in is voluntary and
+enrolment-gated, we store an embedding and never an image, and the public API never
+serves embeddings back. The data answers one question — is this doctor available to see
+patients — and the retention that matters is the transition log, which exists so a state
+can be *explained*, not so a person can be audited.
+
+**9. What breaks if Redis dies mid-demo?**
+Live updates. `make failure-drill` proves it: the board stops streaming and health says
+`degraded`, but presence, clinic lists, beds and the emergency ranking all keep serving,
+because the clinical data is in Postgres and Redis was never in that path.
+
+---
+
+## Allocation, and the wait-time claim (PRD §M2, Tier 1) — 2026-08-21
+
+**Read this section before quoting any wait-time number.** It is the one most likely to
+be challenged, and the honest answer is stronger than the tempting one.
+
+### ⚠ Gaps — do not claim these
+
+- **Do NOT say "everyone waits less".** It is not true and the repo proves it is not.
+  With spare capacity our mean displacement is 23.1 min against first-come-first-served
+  at 22.7 — marginally *worse* on the raw mean. The claim is **"the right people wait
+  less"**.
+- **Experienced wait barely moves.** 14.7 min vs 15.1 with spare capacity, identical
+  (3.9) when busy. If a judge asks specifically about waiting time in the clinic, the
+  optimiser is not where the win is — the presence layer is. See Q3.
+- **The wait-time model is trained on synthetic clinic days.** No public dataset gives
+  per-position OPD waits. It says SYNTHETIC in the manifest, the metrics endpoint and
+  the API response. Never describe it as trained on real data.
+- **The no-show dataset is Brazilian, not Indian.** 110,527 real appointments from
+  Vitoria — the largest public no-show set there is, and there is no Indian equivalent
+  at that scale. Say so before a judge asks; the booking-time features it uses
+  (lead days, SMS received, age) transfer, but the base rate almost certainly does not.
+- **Do not quote "0.161 base rate".** 0.161 is the *baseline Brier score*; the base rate
+  is 0.2019. This exact misreading was in our own runbook until 2026-08-21.
+- **The comparison is a simulation**, 40 runs per scenario against a seeded generator —
+  not a measured hospital.
+
+### Q&A
+
+**1. What triggers a replan? Does someone press a button?**
+No. The presence change is the trigger — `replan_if_unavailable` fires off the state
+transition itself, so the plan and the board cannot disagree because they commit in the
+same transaction. Demo step 8: mark a doctor absent and about thirty patients are
+re-seated with nothing clicked.
+
+**2. "Under five seconds" — prove it at scale, not for one doctor.**
+`make load-check` replans **every doctor in the network** and reports the worst case
+rather than the average: 30 replans, median ~30 ms, **worst 166 ms**, 962 ms for all
+three hospitals — 30x inside the budget. It runs `apply=False`, so it writes nothing and
+can be run repeatedly. Every real solve also writes a `plan_runs` row with its status,
+duration and moved count, so the number on the slide is the number in the table.
+
+**3. Your own data says you barely reduce waiting time. So what did you actually improve?**
+Two things, and it is worth separating them. First, *who* waits: weighted cost drops
+~4.6x with spare capacity because referred patients wait 0 minutes instead of 25 and
+priority patients 8 instead of 49, paid for by general patients waiting longer. Second,
+and much bigger — **the waiting we remove is not in the queue, it is the journey**. A
+patient who travels four hours to a clinic with no doctor loses a day; 334 patients were
+told before their slot, median three hours' notice. `/impact` shows both, including the
+half that does not flatter us.
+
+**4. Then why use a solver at all, if a sort by priority would do?**
+Because the constraint is an assignment, not an ordering: N patients into M seats where
+seats differ by doctor, time and capacity, and the cost is `weight x displacement`.
+Sorting gets you a greedy answer that is often infeasible at the margin. In the busy
+scenario the difference is stark — 71.8 min mean displacement against 147.8, and FCFS
+ends up dropping referred patients entirely because it never looks at *why* they were
+referred.
+
+**5. Ten of forty patients could not be placed. Is that a failure?**
+It is arithmetic: 30 seats, 40 patients. Both policies must turn ten away. The
+difference is who — FCFS picks by list order and drops referred patients; CP-SAT drops
+the lowest clinical priority and seats every referred patient first. And nobody is
+silently dropped: they become `RESCHEDULE_PENDING`, which is a visible state on the
+board and counted on `/impact`, because cancelling them quietly would mean they find out
+by turning up.
+
+**6. How good is the no-show model, honestly?**
+ROC-AUC 0.735 and Brier 0.143 against a baseline of 0.161 — that baseline being what you
+score by predicting the 20.2% base rate for everybody, so the model earns its keep but
+not dramatically. Trained on the real public 110,527-appointment dataset. That is a real number, not a good one — no-show is
+genuinely hard to predict from booking-time features, and anyone showing 0.95 on this
+dataset has leaked a feature. An earlier version of our wait model scored a meaningless
+1.3-minute MAE by leaking exactly that; the feature list is now restricted to what is
+knowable while the patient is standing in the queue.
+
+**7. What stops two patients being booked into the same seat?**
+Capacity is re-checked under a `SELECT … FOR UPDATE` at write time, not when the option
+was displayed. Two callers racing for the last slot: the second gets a `BookingError` and
+is told the time has just been taken. That is one implementation in `services/booking.py`
+that every channel calls, so the PWA, WhatsApp, IVR and the staff desk cannot give
+different answers.
+
+---
+
+## Beds, referral reservation, and the Golden Hour router (PRD §M5, §M8, Tier 2) — 2026-08-21
+
+### ⚠ Gaps — do not claim these
+
+- **Drive times are estimated, not measured.** No OSRM container is running.
+  `OSRM_MOCK_MODE` defaults true and the estimate is straight-line distance x a 2.2
+  winding factor at 38 km/h. Every card on the screen says "Drive time estimated".
+- **All blood figures are generated.** The e-RaktKosh adapter exists and runs in mock
+  mode; every row carries `source = SYNTHETIC` and the widget reads that label from the
+  data. The real portal publishes no documented API — see the adapter docstring.
+- **This is decision support, not dispatch.** Nothing moves a vehicle. Live 108
+  integration and fleet tracking are Tier 3 and explicitly not built.
+- **No referral has crossed a real hospital boundary.** Both facilities are in one
+  database. The flow, the hold and the expiry are real; the inter-facility trust model is
+  not addressed.
+
+### Q&A
+
+**1. What does "reserving a bed" actually mean — a row in a table?**
+It means the bed leaves the destination's free count immediately, and can only be taken
+by that referral. `beds.reserve` picks a FREE bed of the right ward `FOR UPDATE SKIP
+LOCKED`, so two referrals racing for the last ICU bed cannot both win — the loser is
+told there is none, which is the honest answer. Watch `/beds` while placing one on
+`/referrals`: free drops by one.
+
+**2. What if the referring hospital forgets to cancel?**
+Then it expires by itself. That is the module's whole reason to exist — a reservation
+that only releases when somebody remembers is how a district hospital comes to believe
+there is an ICU bed in Shimla that was given away three hours ago. Expiry is a real
+server-side sweeper on a timer (2h emergency, 6h urgent, 24h routine), not lazy
+evaluation on read, so the bed comes back whether or not anyone has a screen open.
+
+**3. What happens if a confirmation races the expiry?**
+The confirmation loses. Confirming a hold that expired a second ago raises rather than
+resurrecting it, because that bed is already back in the pool and may already belong to
+someone else. There is a test for exactly that second, and another asserting expiry
+releases the bed **and** the reserved specialist slot together — releasing one and
+forgetting the other leaves a consultant's calendar blocked for a patient who is not
+coming.
+
+**4. Your router ranked a hospital first and then said "presence unknown". Is the
+surgeon there or not?**
+We do not know, and that is the answer. "We cannot see the surgeon" is not "there is no
+surgeon" — collapsing those two is the most tempting shortcut in the module and we
+refuse it. Unknown presence scores 0.5, between confirmed-present (1.0) and confirmed-
+absent (0.0), and the reason string says so verbatim. This is the same D15 rule that
+governs slot availability.
+
+**5. Why is a hospital with an empty ICU "ruled out"?**
+Because viability is specialist-present AND a free bed, deliberately not "capability
+above zero". Beds and blood would otherwise carry a hospital with nobody to operate to
+the top of the list — which is how you send a head injury somewhere with an empty ICU
+and no surgeon. The first version had exactly that bug; ruled-out facilities now stay on
+screen, greyed, with the reason.
+
+**6. Why show the hospitals you rejected at all?**
+Because a ranking that silently omits a hospital cannot be questioned. Every candidate
+is returned and persisted to `route_rankings` with its factors, so the demo replays and
+a clinician can disagree with the reasoning rather than with an oracle. Switch the
+specialty to Neurosurgery and all three grey out: *no Neurosurgery department here*.
+
+**7. Three seconds is the requirement. What do you measure?**
+35–56 ms in practice, measured per call and persisted with the ranking rather than
+asserted. One `/table` request answers origin-to-all-facilities, because N sequential
+routing round trips would not survive the budget — that shape is in the adapter
+interface, not in the caller.
+
+**8. How wrong is the offline drive-time estimate?**
+Calibrated against three real Himachal road pairs; it puts Rampur–Shimla at 127 km where
+the road is about 130. So it is close, and it is still an estimate — real OSRM is one
+environment variable, and the adapter degrades back to the estimator rather than failing
+a ranking if the container is unreachable. An emergency screen showing nothing is worse
+than one showing an estimate and labelling it.
+
+---
+
+## "Does this actually solve the problem statement?" — 2026-08-21
+
+The single most likely opening question. Answer it with the statement's own words.
+
+| The statement asks for | Where it is |
+|---|---|
+| "automating the process of identifying doctor availability" | M1 fusion engine, `/` |
+| "RFID, face detection, proximity of Mobile phone, or any other relevant technology" | all four: RFID gates, face kiosk, BLE proximity, Wi-Fi geofence, plus roster |
+| "use AI to allocate appointment slots based on the doctor's presence" | CP-SAT, triggered by the presence change itself |
+| "…and the number of waitlisted patients" | the solver weights the whole waitlist by priority x displacement |
+| "improve the overall patient experience" | PWA, WhatsApp, SMS, Telegram, IVR, voice, and the patient's own queue screen |
+| "patients will benefit with reduced waiting time" | `/impact` — and read Q1 below before quoting it |
+
+**1. You claim reduced waiting time. Show me the number.**
+334 patients told their appointment moved, every one before the slot they would have
+travelled to, median three hours' notice. That is the waiting removed — a journey not
+made, not minutes shaved off a queue. And on the queue itself we are honest: against
+first-come-first-served we barely move experienced wait, and with spare capacity our raw
+mean is marginally worse. What changes is who waits. Both halves are on `/impact`.
+
+**2. Which parts of this are beyond what the statement asked for?**
+Bed management, referral reservation and the Golden Hour router. They come from our own
+PRD as Tier 2 and they work, but the statement does not mention emergencies, beds or
+referrals — we would rather name that than have it noticed. Everything the statement
+does ask for is built.
+
+**3. What in the demo is fake?**
+The hardware signals (simulators posting to the real endpoint), all blood figures
+(SYNTHETIC, labelled in the data), the drive times (estimated, labelled on every card),
+the wait-time model's training data (synthetic clinic days), and every messaging channel
+except Telegram and email, which are verified live on a real handset. The no-show model
+is trained on a real public 110k dataset. Nothing that is simulated is unlabelled.
+
+**4. What would it take to run this in a real hospital tomorrow?**
+Hardware and credentials, not architecture. Every external service is behind an adapter
+with a `*_MOCK_MODE` flag — swapping in a real WhatsApp number, an Exotel line or an
+OSRM container is configuration. What is genuinely unfinished: face embedding
+extraction, the e-RaktKosh ingest, provider signature verification on the IVR webhook,
+and a trust model for referrals crossing an organisational boundary.
