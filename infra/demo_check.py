@@ -21,6 +21,11 @@ from client import Setu
 
 results = []
 
+# Mirrors REPLAN_HORIZON_HOURS in backend/app/services/scheduling.py. Looking for a
+# colleague outside the window the optimiser actually searches would pick a doctor it
+# then cannot re-seat.
+REPLAN_HORIZON = 24
+
 
 def report(step, ok, detail=""):
     results.append((step, ok, detail))
@@ -53,13 +58,64 @@ async def main():
         print("REFUSING: the server has SMS in live mode. Set SMS_MOCK_MODE=true.")
         sys.exit(2)
     tok = a.http.headers["Authorization"].split()[1]
-    doc = next(d for d in a.roster()["doctors"] if d["badge_id"] == "HP-DOC-1001")
-    did = doc["doctor_id"]
+
+    # Pick the doctor to disrupt from the data, not from a fixed badge. This run puts
+    # him on leave and moves his patients away, so a second run against that same badge
+    # would find nobody to move and report a broken spine when the spine is fine.
+    #
+    # "Worth disrupting" is two conditions, and the second one matters: he must have a
+    # clinic ahead of him, AND his department must hold an available colleague with open
+    # slots inside the replan horizon. Pick a doctor whose only colleague is already on
+    # leave and the optimizer correctly finds nowhere to put anyone — moved=0 is then
+    # the right answer to an empty department, not a failure of the spine.
+    AVAILABLE = "not in ('ON_LEAVE', 'OFF_SHIFT', 'IN_SURGERY')"
+    badge = psql(f"""
+        select d.badge_id from doctors d
+        join slots s on s.doctor_id = d.id and s.starts_at >= now()
+        join appointments a on a.slot_id = s.id and a.status = 'BOOKED'
+        where coalesce((select x.state::text from doctor_status x
+                        where x.doctor_id = d.id), 'UNKNOWN') {AVAILABLE}
+          and exists (
+            select 1 from doctors d2
+            join slots s2 on s2.doctor_id = d2.id
+            where d2.department_id = d.department_id and d2.id <> d.id
+              and s2.status = 'OPEN'
+              and s2.starts_at between now() and now() + interval '{REPLAN_HORIZON} hours'
+              and coalesce((select y.state::text from doctor_status y
+                            where y.doctor_id = d2.id), 'UNKNOWN') {AVAILABLE}
+          )
+        group by d.id, d.badge_id order by count(a.id) desc limit 1
+        """)
+    report(
+        "a doctor has a clinic the optimiser could re-seat",
+        bool(badge),
+        badge or "no available doctor has both a clinic and an available colleague",
+    )
+    if not badge:
+        # Everything downstream measures a replan that cannot happen. Stop here rather
+        # than reporting six misleading failures.
+        a.close()
+        print(f"\n{len(results)-1}/{len(results)} PASS")
+        sys.exit(1)
 
     before = next(
-        c for c in a.http.get("/api/v1/scheduling/clinic").json() if c["badge_id"] == "HP-DOC-1001"
+        c for c in a.http.get("/api/v1/scheduling/clinic").json() if c["badge_id"] == badge
     )
-    report("clinic list seeded", before["booked"] > 0, f"{before['booked']} waiting")
+    did = before["doctor_id"]
+    # What to put back at the end. Without a restore, every run strands one more doctor
+    # ON_LEAVE and the dataset rots a little further each time it is checked.
+    was = (
+        psql(
+            "select ds.state from doctor_status ds join doctors d on d.id = ds.doctor_id "
+            f"where d.badge_id = '{badge}'"
+        )
+        or "UNKNOWN"
+    )
+
+    # Only rows this run wrote. The table is not truncated between runs unless `make
+    # seed` ran, so an all-time count passes on history alone — it once read
+    # "747 rows for 0 patients".
+    since = psql("select now()")
 
     # One real patient of his, captured before the replan, so the last hop of the
     # exit criterion ("patient PWA shows new slot") is checked against a patient who
@@ -69,7 +125,7 @@ async def main():
         "join slots s on s.id = a.slot_id "
         "join doctors d on d.id = s.doctor_id "
         "join users u on u.id = d.user_id "
-        "where d.badge_id = 'HP-DOC-1001' and a.status = 'BOOKED' "
+        f"where d.badge_id = '{badge}' and a.status = 'BOOKED' "
         "and s.starts_at >= now() order by s.starts_at limit 1"
     ).split("|")
 
@@ -102,11 +158,12 @@ async def main():
     )
 
     # Scoped to the reschedule templates and to the two messaging channels: a bare
-    # count(*) would pass on booking confirmations alone. `make seed` truncates the
-    # table, so these rows are this run's.
+    # count(*) would pass on booking confirmations alone. Scoped to `since` as well,
+    # because without a `make seed` the table still holds every previous run's rows.
     breakdown = psql(
         "select channel || ' ' || count(*) from notifications "
         "where template in ('rescheduled', 'reschedule_pending') "
+        f"and created_at >= '{since}' "
         "and channel in ('WHATSAPP', 'SMS') group by channel"
     )
     sent = sum(int(line.split()[1]) for line in breakdown.splitlines() if line)
@@ -124,7 +181,7 @@ async def main():
     )
 
     after = next(
-        c for c in a.http.get("/api/v1/scheduling/clinic").json() if c["badge_id"] == "HP-DOC-1001"
+        c for c in a.http.get("/api/v1/scheduling/clinic").json() if c["badge_id"] == badge
     )
     report("absent doctor holds nobody", after["booked"] == 0, f"{after['booked']} waiting")
 
@@ -148,6 +205,12 @@ async def main():
             else "gone from her own queue"
         ),
     )
+
+    # Put him back the way he was found. The check is allowed to disrupt a clinic; it is
+    # not allowed to leave the dataset worse than it started, and an override that is
+    # never cleared strands one more doctor ON_LEAVE on every single run.
+    a.override(did, was, "demo-check: restoring state captured at start")
+    print(f"  [restored] {badge} back to {was}")
 
     # Phase 2 modules do not exist yet — nothing to check (step 3 N/A)
     a.close()

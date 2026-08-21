@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { Button, Chip, Eyebrow, Panel, PwaHeader } from "../components/ui";
+import { Button, Chip, Panel, PwaHeader } from "../components/ui";
+import VoiceCall from "../components/VoiceCall";
 import { api, getToken, isPatient } from "../lib/api";
 import { formatWhen, getLang, setLang, t, type Lang } from "../lib/i18n";
 import { enqueue, flush, pending, type Intent } from "../lib/outbox";
@@ -205,8 +206,17 @@ export default function Book() {
           </h1>
           {patient && <p className="mt-1 text-muted">{patient.name}</p>}
 
+          {/* Speaking is the more accessible path for a low-literacy patient, so it
+              leads rather than hides under the form. Renders nothing when Vapi is
+              unconfigured, and the form below books the same appointment. */}
+          <div className="mt-6">
+            <VoiceCall lang={lang} />
+          </div>
+
           <label className="mt-6 block">
-            <Eyebrow>{say("chooseDepartment")}</Eyebrow>
+            <span className="text-[15px] text-muted">
+              {say("chooseDepartment")}
+            </span>
             <select
               value={dept}
               onChange={(e) => setDept(e.target.value)}

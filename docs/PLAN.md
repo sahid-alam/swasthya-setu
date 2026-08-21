@@ -113,9 +113,12 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
   `channel=VOICE` and lands a receipt in the outbox. The assistant now exists —
   `45374521-8b3b-427e-ac06-58f36e493044`, voice `vapi/Elliot`, 3 tools — created by
   `infra/vapi_setup.py` and then updated by re-running it, which proves both paths.
-  The dashboard button is built and gated on `VITE_VAPI_PUBLIC_KEY` +
-  `VITE_VAPI_ASSISTANT_ID`: unset, it says so and names the IVR fallback, and Vite
-  tree-shakes the 300 kB SDK out of the bundle entirely. Set, the SDK is a lazy
+  The browser button lives on the **patient PWA** (`/book`), not the command centre —
+  it books appointments, which is M3, and staff already have the booking form. It is
+  gated on `VITE_VAPI_PUBLIC_KEY` + `VITE_VAPI_ASSISTANT_ID`: unset, it renders nothing
+  at all (a patient must never be shown an env var, and the form below books the same
+  appointment), and Vite tree-shakes the 300 kB SDK out of the bundle entirely. Set,
+  the SDK is a lazy
   `vapi-*.js` chunk explicitly excluded from the PWA precache — a patient on a budget
   Android must not download a voice agent they will never open. **Still blocked on the
   deployment**: with no `PUBLIC_BASE_URL` the assistant can talk but its tools cannot

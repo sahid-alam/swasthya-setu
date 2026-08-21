@@ -8,8 +8,15 @@ Everything below is state a fresh session cannot infer from the code in reasonab
 **Phase 0 and Phase 1 are complete; Phase 2 is well under way.** 38 of 54 plan items
 ticked. Migrations are at `0006`.
 
-- **182 backend tests, 13 frontend tests**, `make lint` clean, suite stable across repeat runs
-- `make demo-check` is **8/8** — the Iron Rule 4 guard; run it after anything touching the spine
+- **182 backend tests, 18 frontend tests**, `make lint` clean, suite stable across repeat runs
+- `make demo-check` is **8/8** — the Iron Rule 4 guard; run it after anything touching the spine.
+  **It no longer needs a fresh `make seed`.** It used to target one fixed badge
+  (`HP-DOC-1001`), drain him and leave him `ON_LEAVE`, so a second run found nobody to
+  move and reported a broken spine that was fine. It now picks, from live data, the
+  busiest doctor who *also* has an available colleague with open slots inside the replan
+  horizon — pick one whose only colleague is already on leave and the optimiser correctly
+  finds nowhere to move anyone — and it restores his presence state at the end, so runs
+  stop stranding a doctor apiece. Verified 3× consecutively, 8/8, no seed between runs.
 - **The next session is UI work.** Backend paused mid-Phase-2; Bhashini is the next
   unchecked item when it resumes.
 
@@ -130,8 +137,10 @@ state rather than leaning on the seed or on test order.
 - ~~The PWA has no queue-position screen.~~ **Built 2026-08-21** — `/my-queue`
   (`routes/MyQueue.tsx`), linked from the booking confirmation. A reschedule is now
   visible on a screen, not only in the notification.
-- **The Vapi call button has never been used.** Gated on `VITE_VAPI_*`; unset, it says so
-  and Vite drops the 300 kB SDK from the bundle entirely.
+- **The Vapi call button has never been used.** It now sits on the patient PWA (`/book`),
+  not the command centre — it books appointments, so it belongs where patients book.
+  Gated on `VITE_VAPI_*`; unset it renders nothing and Vite drops the 300 kB SDK from
+  the bundle entirely.
 - **Wait-time model is trained on synthetic data.** It says so in the manifest, the
   metrics file and the API. Never describe it as trained on real data.
 - **FCFS comparison does not say what we wanted.** With spare capacity CP-SAT does *not*

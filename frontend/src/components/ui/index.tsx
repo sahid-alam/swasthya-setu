@@ -243,18 +243,33 @@ export function FieldBlock({
   label,
   error,
   full = false,
+  plain = false,
   children,
 }: {
   label: string;
   error?: string;
   full?: boolean;
+  /** Patient surfaces (§9b). The mono micro-cap label is staff decoration and must
+   *  never carry patient information — and JetBrains Mono has no Devanagari, so in
+   *  Hindi it silently falls back to a broken face at 11px. */
+  plain?: boolean;
   children: ReactNode;
 }) {
   return (
     <label className={cx("flex flex-col gap-1.5", full && "col-span-2")}>
-      <Eyebrow>{label}</Eyebrow>
+      {plain ? (
+        <span className="text-[15px] text-muted">{label}</span>
+      ) : (
+        <Eyebrow>{label}</Eyebrow>
+      )}
       {children}
-      {error && <span className="text-[11px] text-danger">{error}</span>}
+      {error && (
+        <span
+          className={cx("text-danger", plain ? "text-[15px]" : "text-[11px]")}
+        >
+          {error}
+        </span>
+      )}
     </label>
   );
 }

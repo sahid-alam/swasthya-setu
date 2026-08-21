@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { Button, Eyebrow, FieldBlock, Input, Panel } from "../components/ui";
+import { Button, FieldBlock, Input, Panel } from "../components/ui";
 import { setToken } from "../lib/api";
 import { getLang, setLang, t, type Lang } from "../lib/i18n";
 
@@ -81,7 +81,12 @@ export default function PatientLogin() {
     <main className="mx-auto grid min-h-screen max-w-[460px] place-items-center px-4 text-[15px]">
       <Panel className="fade-up w-full p-7">
         <div className="flex items-center justify-between">
-          <Eyebrow dash>{say("appName")}</Eyebrow>
+          <span className="inline-flex items-center gap-2">
+            <span className="h-px w-[22px] bg-muted-2" aria-hidden />
+            <span className="text-[15px] font-medium tracking-[-0.01em] text-muted">
+              {say("appName")}
+            </span>
+          </span>
           <button
             onClick={toggleLang}
             className="min-h-[48px] px-3 text-[15px] text-primary underline"
@@ -97,7 +102,7 @@ export default function PatientLogin() {
         {stage === "phone" ? (
           <form onSubmit={requestCode} className="mt-6 grid gap-4">
             {via === "phone" ? (
-              <FieldBlock label={say("phoneLabel")}>
+              <FieldBlock plain label={say("phoneLabel")}>
                 <Input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -108,7 +113,7 @@ export default function PatientLogin() {
                 />
               </FieldBlock>
             ) : (
-              <FieldBlock label={say("emailLabel")}>
+              <FieldBlock plain label={say("emailLabel")}>
                 <Input
                   type="email"
                   value={email}
@@ -147,7 +152,7 @@ export default function PatientLogin() {
             {via === "phone" && (
               <p className="text-[14px] text-muted">{say("codeInTelegram")}</p>
             )}
-            <FieldBlock label={say("codeLabel")} error={error}>
+            <FieldBlock plain label={say("codeLabel")} error={error}>
               <Input
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
