@@ -120,7 +120,9 @@ async def reserve(
             bed_id=bed.id,
             patient_id=patient_id,
             referral_id=referral_id,
-            from_at=datetime.now(tz=until.tzinfo) if until else func.now(),
+            # The database clock, always — mixing a Python clock in on one branch
+            # made an allocation's start time depend on whether an expiry was given.
+            from_at=func.now(),
             to_at=until,
         )
     )

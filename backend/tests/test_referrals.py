@@ -13,11 +13,12 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.db import SessionLocal
 from app.models import (
     Bed,
+    BedAllocation,
     BedKind,
     BedState,
     Hospital,
@@ -43,6 +44,15 @@ async def _bed(db, hospital_id, kind=BedKind.ICU) -> Bed:
     The ward is prefixed "AAA" so it sorts ahead of every seeded ward: reserve() orders
     by (ward, code), so this is the bed the test deterministically gets.
     """
+    # Clear any bed a crashed earlier run left behind: two "AAA-Test-*" wards sort
+    # against each other by random hex, so a stray one would win the ordering and this
+    # test would reserve a bed it does not own.
+    await db.execute(
+        delete(BedAllocation).where(
+            BedAllocation.bed_id.in_(select(Bed.id).where(Bed.ward.like("AAA-Test%")))
+        )
+    )
+    await db.execute(delete(Bed).where(Bed.ward.like("AAA-Test%")))
     bed = Bed(
         hospital_id=hospital_id,
         ward=f"AAA-Test-{uuid.uuid4().hex[:6]}",
@@ -285,3 +295,58 @@ def test_a_hospital_cannot_refer_to_itself(client):
 def test_specialty_decides_the_ward(specialty, expected):
     """A wrong guess here puts a trauma case in a maternity bed."""
     assert referrals.KIND_FOR_SPECIALTY.get(specialty, BedKind.GENERAL) is expected
+
+
+def test_a_held_bed_cannot_be_taken_by_hand(client, admin_token):
+    """Blocking the way in is not enough. Taking a held bed by hand would leave the
+    referring hospital believing it still has a bed at the destination."""
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    async def setup():
+        async with SessionLocal() as db:
+            src, dst = await _two_hospitals(db)
+            await _bed(db, dst.id)
+            patient = await _patient(db)
+            referral = await referrals.request(
+                db,
+                from_hospital_id=src.id,
+                to_hospital_id=dst.id,
+                patient_id=patient.id,
+                specialty="Trauma",
+                urgency=ReferralUrgency.EMERGENCY,
+            )
+            ids = (str(referral.reserved_bed_id), str(referral.id))
+            await db.commit()
+            return ids
+
+    bed_id, referral_id = client.portal.call(setup)
+    try:
+        r = client.post(f"/api/v1/beds/{bed_id}/state", json={"state": "OCCUPIED"}, headers=headers)
+        assert r.status_code == 409, r.text
+        assert referral_id in r.json()["detail"]
+
+        # And reserving by hand stays refused from the other direction.
+        r = client.post(f"/api/v1/beds/{bed_id}/state", json={"state": "RESERVED"}, headers=headers)
+        assert r.status_code == 409
+
+        # Cancelling the referral is the way out, and then the bed moves.
+        assert (
+            client.post(f"/api/v1/referrals/{referral_id}/cancel", headers=headers).status_code
+            == 200
+        )
+        r = client.post(f"/api/v1/beds/{bed_id}/state", json={"state": "CLEANING"}, headers=headers)
+        assert r.status_code == 200, r.text
+        assert r.json()["state"] == "CLEANING"
+    finally:
+        # This test commits, so it cleans up after itself rather than leaving a stray
+        # bed and referral behind for whatever runs next.
+        async def cleanup():
+            async with SessionLocal() as db:
+                await db.execute(delete(Referral).where(Referral.id == uuid.UUID(referral_id)))
+                await db.execute(
+                    delete(BedAllocation).where(BedAllocation.bed_id == uuid.UUID(bed_id))
+                )
+                await db.execute(delete(Bed).where(Bed.id == uuid.UUID(bed_id)))
+                await db.commit()
+
+        client.portal.call(cleanup)

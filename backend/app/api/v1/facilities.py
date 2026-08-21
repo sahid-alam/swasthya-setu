@@ -17,6 +17,7 @@ from app.models import (
     Bed,
     BedKind,
     BedState,
+    BloodGroup,
     BloodStock,
     Hospital,
     Patient,
@@ -29,6 +30,7 @@ from app.models import (
 from app.security import require_roles
 from app.services import beds as bed_service
 from app.services import referrals as referral_service
+from app.services import routing
 
 router = APIRouter(tags=["facilities"])
 
@@ -128,6 +130,23 @@ async def set_bed_state(
             status.HTTP_409_CONFLICT,
             "a bed is reserved by placing a referral, not by hand",
         )
+    if bed.state is BedState.RESERVED:
+        # Blocking the way in is not enough: taking a held bed by hand would leave the
+        # referring hospital believing it still has a bed here, which is the exact
+        # failure M5 exists to prevent. Cancelling the referral is the way out.
+        holder = (
+            await db.execute(
+                select(Referral).where(
+                    Referral.reserved_bed_id == bed_id,
+                    Referral.status == ReferralStatus.RESERVED,
+                )
+            )
+        ).scalar_one_or_none()
+        if holder is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"referral {holder.id} is holding this bed — cancel it to free the bed",
+            )
     await bed_service.release(db, bed_id, to=body.state)
     await db.commit()
     await db.refresh(bed)
@@ -286,3 +305,92 @@ async def blood(
         )
         for s, h in rows
     ]
+
+
+# --- M8 Golden Hour Router ------------------------------------------------------
+# Decision support. CLAUDE.md bans live 108 dispatch and fleet tracking; this ranks
+# hospitals for one location and shows its reasoning. Nothing here moves a vehicle.
+
+
+class RankedOut(BaseModel):
+    rank: int
+    hospital_id: str
+    hospital: str
+    lat: float
+    lng: float
+    drive_minutes: float
+    km: float
+    capability: float
+    viable: bool
+    free_beds: int
+    blood_units: int
+    why: list[str]
+    route_is_estimated: bool
+
+
+class EmergencyOut(BaseModel):
+    emergency_id: str
+    lat: float
+    lng: float
+    specialty_needed: str | None
+    duration_ms: int
+    ranked: list[RankedOut]
+
+
+class EmergencyIn(BaseModel):
+    lat: float
+    lng: float
+    description: str | None = None
+    specialty: str | None = None
+    blood_group: BloodGroup | None = None
+
+
+@router.post("/emergency/rank", response_model=EmergencyOut)
+async def rank_for_emergency(
+    body: EmergencyIn,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(STAFF),
+) -> EmergencyOut:
+    # `require_roles` hands back decoded JWT claims, not a User row; `sub` is the id.
+    try:
+        created_by = uuid.UUID(user["sub"])
+    except (KeyError, ValueError):
+        created_by = None
+    try:
+        request, ranked, duration_ms = await routing.rank(
+            db,
+            lat=body.lat,
+            lng=body.lng,
+            specialty=body.specialty,
+            blood_group=body.blood_group,
+            description=body.description,
+            created_by=created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await db.commit()
+    return EmergencyOut(
+        emergency_id=str(request.id),
+        lat=body.lat,
+        lng=body.lng,
+        specialty_needed=body.specialty,
+        duration_ms=duration_ms,
+        ranked=[
+            RankedOut(
+                rank=i,
+                hospital_id=str(c.hospital_id),
+                hospital=c.hospital,
+                lat=c.lat,
+                lng=c.lng,
+                drive_minutes=c.drive_minutes,
+                km=c.km,
+                capability=round(c.capability, 3),
+                viable=c.viable,
+                free_beds=c.free_beds,
+                blood_units=c.blood_units,
+                why=c.reasons,
+                route_is_estimated=c.mock_route,
+            )
+            for i, c in enumerate(ranked, start=1)
+        ],
+    )
