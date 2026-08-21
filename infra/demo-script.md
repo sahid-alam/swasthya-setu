@@ -22,15 +22,17 @@ PRESENCE_SWEEP_SECONDS=5 SIM_SPEED=12 \
 cd frontend && npm run dev
 ```
 
-```bash
-# 4. beds + blood, once. Additive and idempotent, and deliberately NOT part of
-#    `make seed` — that truncates `patients`, which kills a live Telegram link.
-make seed-facilities
-```
+On a clean machine, `make demo` does all of the seeding in one go — migrations, the
+demo day, and the 159 beds and blood stock the Golden Hour and referral beats need.
 
-Reset to a clean stage at any point with `make migrate seed` (deterministic —
-the same 3 hospitals, 30 doctors and 200 patients every single time), then
-`make seed-facilities` to put the 159 beds back.
+Reset to a clean stage at any point with `make seed` (deterministic — the same 3
+hospitals, 30 doctors, 200 patients and 159 beds every single time).
+
+> **`make seed` truncates `patients`**, which kills a live Telegram link and the demo
+> patient's phone and email. Set `DEMO_PATIENT_PHONE` / `DEMO_PATIENT_EMAIL` in `.env`
+> so a reseed restores them; the Telegram chat still needs one re-tap of Share. If you
+> only want beds and blood back, `make seed-facilities` is additive and touches no
+> patient.
 
 **Before you walk on stage, run the guard:**
 

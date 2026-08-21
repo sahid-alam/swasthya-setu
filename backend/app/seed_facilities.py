@@ -1,14 +1,18 @@
 """Beds and blood stock for M5 (referral reservation) and M8 (Golden Hour ranking).
 
-Deliberately NOT part of `app.seed`. That one truncates `patients`, which destroys a
-live Telegram link and the demo patient's phone and email — so facility inventory, which
-has nothing to do with patients, gets its own additive pass:
+A separate module from `app.seed` on purpose. That one truncates `patients`, which
+destroys a live Telegram link and the demo patient's phone and email — so facility
+inventory, which has nothing to do with patients, can be refilled on its own:
 
     make seed-facilities
 
+`make seed` runs BOTH (this second), because `app.seed` truncates `hospitals CASCADE`
+and beds/blood_stock hang off hospitals — a reseed that stopped at `app.seed` would
+silently leave the Golden Hour and referral beats with no beds and no error to explain
+why.
+
 Idempotent by insert-if-absent on the natural keys (hospital + bed code, hospital +
-group + component), so running it twice changes nothing and running it after a real
-`make seed` refills what CASCADE removed.
+group + component), so running it twice changes nothing.
 
 Blood stock is SYNTHETIC and every row says so in its `source` column, which is what the
 §9d SYNTHETIC DATA chip reads. M6 — the real e-RaktKosh ingest adapter — is NOT built;

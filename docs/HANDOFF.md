@@ -106,6 +106,10 @@ expect that and flip `SMS_MOCK_MODE=true` to verify the spine.
 8. **`make seed` truncates `patients`**, destroying any live Telegram link and the demo
    patient's phone and email. Set `DEMO_PATIENT_PHONE` and `DEMO_PATIENT_EMAIL` in `.env`
    so a re-seed restores them; the Telegram chat still needs one re-tap of Share.
+   It also truncates `hospitals CASCADE`, which takes **beds and blood_stock** with it —
+   so `make seed` now runs `app.seed_facilities` straight afterwards. Verified: 159 beds
+   go to 0 on that TRUNCATE, and Postgres names `blood_stock` in the cascade notice.
+   `make seed-facilities` alone refills them without touching a patient.
 9. **`pkill -f uvicorn` can leave a stale listener on :8000**, and the next server starts
    without ever binding — so your new env vars appear to be ignored. Kill by port:
    `lsof -nP -iTCP:8000 -sTCP:LISTEN -t | xargs kill -9`.

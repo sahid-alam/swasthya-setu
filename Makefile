@@ -24,10 +24,14 @@ dev-local:         ## no-docker path: expects postgres + redis already running l
 migrate:
 	cd backend && .venv/bin/alembic upgrade head
 
-seed:
+# `app.seed` truncates hospitals CASCADE, and beds/blood_stock hang off hospitals —
+# so a reseed silently empties them and the Golden Hour and referral beats break with
+# no error. Facilities are refilled here rather than left to memory.
+seed:              ## full reseed. TRUNCATES patients — kills a live Telegram link
 	cd backend && .venv/bin/python -m app.seed
+	cd backend && .venv/bin/python -m app.seed_facilities
 
-seed-facilities:  ## beds + blood stock — additive, never truncates patients
+seed-facilities:  ## beds + blood only — additive, never truncates patients
 	cd backend && .venv/bin/python -m app.seed_facilities
 
 ingest-blood:  ## refresh blood stock through the e-RaktKosh adapter (mock by default)
@@ -38,8 +42,12 @@ train:             ## retrain ML artifacts (downloads the 110k dataset on first 
 	cd backend && .venv/bin/python ../ml/train_wait.py
 	cd backend && .venv/bin/python ../ml/compare_fcfs.py
 
-demo: migrate seed  ## seeded demo day + scripted scenario
-	@echo "scripted scenario lands in Phase 3 — see infra/demo-script.md"
+demo: migrate seed  ## everything a clean machine needs, then walk the runbook
+	@echo ""
+	@echo "  seeded: 3 hospitals, 30 doctors, 200 patients, 159 beds, blood stock"
+	@echo "  next  : start the backend and frontend (infra/demo-script.md, top)"
+	@echo "  guard : make demo-check   -> 12/12 before you present"
+	@echo ""
 
 sms-probe:         ## check the phone gateway; --send for ONE real message
 	cd backend && .venv/bin/python ../infra/sms_probe.py $(ARGS)
