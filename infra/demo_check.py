@@ -212,7 +212,84 @@ async def main():
     a.override(did, was, "demo-check: restoring state captured at start")
     print(f"  [restored] {badge} back to {was}")
 
-    # Phase 2 modules do not exist yet — nothing to check (step 3 N/A)
+    # --- the PRD's fourth and fifth beats: Golden Hour routing, then a referral ------
+    # PRD §Demo requirements scripts "emergency Golden Hour routing -> referral with bed
+    # reservation". Both exist now, so both get walked.
+
+    # Rampur on NH-5, the PRD's own example location.
+    ranking = a.http.post(
+        "/api/v1/emergency/rank",
+        json={
+            "lat": 31.45,
+            "lng": 77.63,
+            "description": "demo-check: accident on NH-5 near Rampur",
+            "specialty": "General Surgery",
+            "blood_group": "O_NEG",
+        },
+    ).json()
+    ranked = ranking.get("ranked", [])
+    report(
+        "Golden Hour ranks every facility under 3s",
+        bool(ranked) and ranking["duration_ms"] < 3000,
+        f"{len(ranked)} facilities in {ranking.get('duration_ms', '?')}ms",
+    )
+    # The acceptance criterion is the reasoning, not the order.
+    report(
+        "every ranked facility explains itself",
+        bool(ranked) and all(r["why"] for r in ranked),
+        (f"top: {ranked[0]['hospital']} — {ranked[0]['why'][0]}" if ranked else "nothing ranked"),
+    )
+
+    viable = [r for r in ranked if r["viable"]]
+    if viable:
+        destination = viable[0]
+        # Refer FROM somewhere else TO the best-ranked hospital, which is the shape of
+        # the scripted scenario: a district facility sending a case up the valley.
+        source = psql(
+            f"select id from hospitals where id <> '{destination['hospital_id']}' limit 1"
+        )
+        patient_id = psql("select id from patients order by created_at limit 1")
+        placed = a.http.post(
+            "/api/v1/referrals",
+            json={
+                "from_hospital_id": source,
+                "to_hospital_id": destination["hospital_id"],
+                "patient_id": patient_id,
+                "specialty": "General Surgery",
+                "urgency": "EMERGENCY",
+                "notes": "demo-check",
+            },
+        )
+        referral = placed.json() if placed.status_code == 201 else {}
+        report(
+            "referral reserves a bed at the destination",
+            referral.get("status") == "RESERVED" and bool(referral.get("bed")),
+            f"{referral.get('status')} — bed {referral.get('bed')} at {destination['hospital']}",
+        )
+        # It has to be visible to the receiving hospital, not just to whoever placed it.
+        inbox = a.http.get(f"/api/v1/referrals?to_hospital_id={destination['hospital_id']}").json()
+        report(
+            "destination sees the hold on its own list",
+            any(r["id"] == referral.get("id") for r in inbox),
+            f"{len(inbox)} referral(s) inbound",
+        )
+
+        # And give the bed straight back. A demo-check that leaves a bed RESERVED
+        # forever is exactly the rot this script had before today.
+        if referral.get("id"):
+            a.http.post(f"/api/v1/referrals/{referral['id']}/cancel")
+            freed = psql(
+                "select state from beds where id = "
+                f"(select reserved_bed_id from referrals where id = '{referral['id']}')"
+            )
+            print(f"  [restored] referral cancelled, bed released ({freed or 'FREE'})")
+    else:
+        report(
+            "referral reserves a bed at the destination",
+            False,
+            "no viable destination to refer to",
+        )
+
     a.close()
     fails = [s for s, ok, _ in results if not ok]
     print(f"\n{len(results)-len(fails)}/{len(results)} PASS")
