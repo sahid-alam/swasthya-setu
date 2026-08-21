@@ -10,6 +10,7 @@ from app.api.v1 import api_router
 from app.api.v1 import ws as ws_routes
 from app.config import get_settings
 from app.services.presence_sweeper import sweep_forever
+from app.services.referrals import expire_forever
 
 log = logging.getLogger("swasthya")
 
@@ -21,6 +22,9 @@ async def lifespan(_: FastAPI):
     settings = get_settings()
     seconds = settings.presence_sweep_seconds
     tasks = [asyncio.create_task(sweep_forever(seconds))] if seconds > 0 else []
+    # M5: a reservation that only releases when a human remembers is not a reservation.
+    if settings.referral_sweep_seconds > 0:
+        tasks.append(asyncio.create_task(expire_forever(settings.referral_sweep_seconds)))
     if not settings.telegram_mock_mode:
         # Only in live mode: polling Telegram with no token would be a background task
         # failing every five seconds behind a demo that otherwise looks fine.

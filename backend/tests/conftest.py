@@ -4,12 +4,19 @@ import os
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://setu:setu@localhost:5432/swasthya")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("PRESENCE_SWEEP_SECONDS", "0")  # no background re-fusion mid-test
+os.environ.setdefault("REFERRAL_SWEEP_SECONDS", "0")  # tests drive expire_due() themselves
 os.environ.setdefault("JWT_SECRET", "test-secret-at-least-32-bytes-long-for-hs256")
 
 # Not setdefault — an assignment, so it beats a live flag in .env. Real credentials
 # exist on this machine, and a test suite that sends actual SMS off someone's SIM is a
 # test suite nobody can run twice (CLAUDE.md §Conventions, live SMS).
-for _flag in ("SMS_MOCK_MODE", "TELEGRAM_MOCK_MODE", "EMAIL_MOCK_MODE", "WHATSAPP_MOCK_MODE"):
+for _flag in (
+    "SMS_MOCK_MODE",
+    "TELEGRAM_MOCK_MODE",
+    "EMAIL_MOCK_MODE",
+    "WHATSAPP_MOCK_MODE",
+    "OSRM_MOCK_MODE",  # never reach for an OSRM container in a test
+):
     os.environ[_flag] = "true"
 
 import pytest  # noqa: E402

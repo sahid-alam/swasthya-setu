@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from app import events
 from app.adapters.factory import mock_mode
+from app.config import get_settings
 from app.db import engine
 from app.models import Channel
 
@@ -41,5 +42,9 @@ async def health() -> Health:
         status="ok" if postgres and red else "degraded",
         postgres=postgres,
         redis=red,
-        mocks={c.value.lower(): mock_mode(c) for c in MOCKABLE},
+        # `osrm` is not a Channel, so it is not in MOCKABLE — it still has to be
+        # reportable, because a judge asking "are those real drive times?" gets
+        # answered from this endpoint.
+        mocks={c.value.lower(): mock_mode(c) for c in MOCKABLE}
+        | {"osrm": get_settings().osrm_mock_mode},
     )

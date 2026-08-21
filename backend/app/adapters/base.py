@@ -202,3 +202,32 @@ def normalise_phone(raw: str) -> str:
 
 def new_ref(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:12]}"
+
+
+@dataclass(frozen=True)
+class Leg:
+    """One origin-to-hospital road estimate."""
+
+    hospital_id: uuid.UUID
+    km: float
+    minutes: float
+    mock: bool
+
+
+class RoutingAdapter(ABC):
+    """Drive times over a road network — OSRM in production, geometry offline.
+
+    One call for all candidates, not one per hospital: OSRM answers a whole
+    origin-to-many table in a single request, and the Golden Hour claim is a <3s
+    ranking, which N sequential round trips would not survive.
+    """
+
+    @abstractmethod
+    async def table(
+        self, *, origin: tuple[float, float], destinations: list[tuple[uuid.UUID, float, float]]
+    ) -> list[Leg]:
+        """`origin` and each destination are (lat, lng) in WGS84."""
+
+    @abstractmethod
+    async def health(self) -> bool:
+        """Cheap reachability probe; must never raise."""

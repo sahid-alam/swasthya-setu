@@ -6,6 +6,7 @@ from app.api.v1 import (
     channels,
     command,
     dev,
+    facilities,
     health,
     metrics,
     presence,
@@ -21,4 +22,5 @@ api_router.include_router(booking.router)
 api_router.include_router(channels.router)
 api_router.include_router(command.router)
 api_router.include_router(metrics.router)
+api_router.include_router(facilities.router)
 api_router.include_router(dev.router)

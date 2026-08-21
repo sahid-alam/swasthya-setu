@@ -1,4 +1,4 @@
-.PHONY: install bootstrap-local dev dev-local migrate seed demo demo-check test lint train tunnel sms-probe
+.PHONY: install bootstrap-local dev dev-local migrate seed seed-facilities demo demo-check test lint train tunnel sms-probe
 
 # From a clean checkout, with postgres + redis running:
 #   make install bootstrap-local migrate seed test
@@ -26,6 +26,9 @@ migrate:
 
 seed:
 	cd backend && .venv/bin/python -m app.seed
+
+seed-facilities:  ## beds + blood stock — additive, never truncates patients
+	cd backend && .venv/bin/python -m app.seed_facilities
 
 train:             ## retrain ML artifacts (downloads the 110k dataset on first run)
 	cd backend && .venv/bin/python ../ml/train_noshow.py

@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # How often presence is re-fused with no new signal arriving. This is what makes a
     # dead beacon decay instead of sitting on a stale PRESENT. 0 disables (tests).
     presence_sweep_seconds: int = 20
+    # How often expired referral holds are released (M5). 0 disables the sweeper,
+    # which is only ever right in a test that drives expire_due() itself.
+    referral_sweep_seconds: int = 60
 
     # Adapters default to mock (Iron Rule 1). Declared here because the factory reads
     # them — a flag in this class is a flag that actually does something.
@@ -52,6 +55,7 @@ class Settings(BaseSettings):
     telephony_mock_mode: bool = True  # Exotel: IVR now, outbound TTS calls later
     email_mock_mode: bool = True  # false needs the SMTP_* block below
     telegram_mock_mode: bool = True  # false needs TELEGRAM_BOT_TOKEN
+    osrm_mock_mode: bool = True  # false needs OSRM_BASE_URL (M8 Golden Hour)
 
     # Only read when sms_mock_mode is false: an Android running the Traccar SMS
     # Gateway app, reachable on the LAN (never localhost from inside compose).
@@ -115,6 +119,9 @@ class Settings(BaseSettings):
     # Vapi calls our tools from its own servers, so this must be reachable from the
     # internet. Empty means the assistant is created without server tools — it can
     # talk, it just cannot book (Iron Rule 4: the IVR path still books with no internet).
+    # Only read when osrm_mock_mode is false: an OSRM carrying an HP road extract.
+    osrm_base_url: str = ""
+
     public_base_url: str = ""
     # Vapi sends this on every tool call; without it the endpoint refuses to be wired.
     vapi_tool_secret: str = ""

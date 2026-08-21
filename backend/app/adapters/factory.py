@@ -5,9 +5,10 @@ from __future__ import annotations
 
 from functools import cache
 
-from app.adapters.base import MessagingAdapter, TelephonyAdapter
+from app.adapters.base import MessagingAdapter, RoutingAdapter, TelephonyAdapter
 from app.adapters.email_mock import MockEmail
 from app.adapters.ivr_mock import MockExotel
+from app.adapters.osrm_mock import MockOsrm
 from app.adapters.sms_mock import MockSms
 from app.adapters.telegram_mock import MockTelegram
 from app.adapters.whatsapp_mock import MockWhatsApp
@@ -71,3 +72,14 @@ def mock_mode(channel: Channel) -> bool:
         Channel.EMAIL: settings.email_mock_mode,
         Channel.TELEGRAM: settings.telegram_mock_mode,
     }.get(channel, True)
+
+
+@cache
+def routing() -> RoutingAdapter:
+    """Drive times for the Golden Hour router. Mock is geometry, and it is the default:
+    the ranking has to come out on a laptop at a venue with no OSRM and no internet."""
+    if get_settings().osrm_mock_mode:
+        return MockOsrm()
+    from app.adapters.osrm_real import Osrm  # imported only when actually used
+
+    return Osrm()
