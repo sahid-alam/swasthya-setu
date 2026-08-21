@@ -47,6 +47,15 @@ export function tokenRole(): string | null {
 
 export const isPatient = () => tokenRole() === "PATIENT";
 
+/** Sign out, back to the login this token came from. A hard navigation rather than a
+ *  router push on purpose: it drops the in-memory TanStack cache with it, so one
+ *  patient's queue cannot survive into the next patient's session on a shared kiosk. */
+export function logout() {
+  const target = isPatient() ? "/patient" : "/login";
+  setToken(null);
+  location.href = target;
+}
+
 /** Dashboard event stream. Token rides the query string — WebSockets take no headers.
  *  The endpoint also filters on hospital_id; 1D passes it once there is a switcher. */
 export function dashboardSocket(): WebSocket {

@@ -206,6 +206,7 @@ export default function MyQueue() {
         appName={say("appName")}
         switchLabel={say("switchLang")}
         onSwitch={toggleLang}
+        signOutLabel={say("signOut")}
       />
 
       <h1 className="mt-4 text-[28px] leading-tight tracking-[-0.02em]">

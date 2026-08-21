@@ -151,6 +151,7 @@ export default function Book() {
         appName={say("appName")}
         switchLabel={say("switchLang")}
         onSwitch={toggleLang}
+        signOutLabel={say("signOut")}
       />
 
       {!online && (

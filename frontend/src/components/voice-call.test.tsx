@@ -4,8 +4,9 @@ import { expect, it } from "vitest";
 import VoiceCall from "./VoiceCall";
 
 it("unconfigured, it says so and names the fallback instead of offering a dead button", () => {
-  // No VITE_VAPI_* in the test env — the same state a clean checkout builds in, where
-  // Vite tree-shakes the SDK out of the bundle entirely.
+  // test-setup.ts stubs VITE_VAPI_* empty, so this asserts on a clean checkout —
+  // where Vite tree-shakes the SDK out of the bundle entirely — and not on whatever
+  // the developer happens to have in .env for a live demo.
   render(<VoiceCall />);
 
   expect(screen.getByText(/not configured/i)).toBeTruthy();

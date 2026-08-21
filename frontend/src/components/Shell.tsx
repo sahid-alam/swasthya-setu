@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import type { ReactNode } from "react";
 
+import { logout } from "../lib/api";
 import VoiceCall from "./VoiceCall";
 
 /** Command centre chrome — DESIGN.md §4 (floating dark dock) and §9a (this is the
@@ -102,6 +103,20 @@ export default function Shell() {
               </NavLink>
             </li>
           ))}
+          {/* Pinned to the foot of the dock: a destructive action does not belong in
+              the same run as the destinations. */}
+          <li className="mt-auto">
+            <button
+              onClick={logout}
+              className="dock-item flex min-h-[44px] w-full items-center gap-3 rounded-md px-3"
+            >
+              <Icon>
+                <path d="M12.5 6V4.5A1.5 1.5 0 0 0 11 3H5a1.5 1.5 0 0 0-1.5 1.5v11A1.5 1.5 0 0 0 5 17h6a1.5 1.5 0 0 0 1.5-1.5V14" />
+                <path d="M8.5 10h8M14 7.5 16.5 10 14 12.5" />
+              </Icon>
+              <span className="dock-label text-[14px]">Sign out</span>
+            </button>
+          </li>
         </ul>
       </nav>
       {/* 68px dock + 16px inset either side */}

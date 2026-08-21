@@ -2,6 +2,8 @@
    Every screen composes these; no screen re-invents a panel or a chip. */
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 
+import { logout } from "../../lib/api";
+
 const cx = (...parts: (string | false | undefined)[]) =>
   parts.filter(Boolean).join(" ");
 
@@ -32,25 +34,37 @@ export function PwaHeader({
   appName,
   switchLabel,
   onSwitch,
+  signOutLabel,
 }: {
   appName: string;
   switchLabel: string;
   onSwitch: () => void;
+  signOutLabel: string;
 }) {
   return (
-    <header className="flex items-center justify-between">
+    <header className="flex items-center justify-between gap-2">
       <span className="inline-flex items-center gap-2">
         <span className="h-px w-[22px] bg-muted-2" aria-hidden />
         <span className="text-[15px] font-medium tracking-[-0.01em] text-muted">
           {appName}
         </span>
       </span>
-      <button
-        onClick={onSwitch}
-        className="min-h-[48px] rounded-sm px-4 text-[15px] text-primary underline"
-      >
-        {switchLabel}
-      </button>
+      <span className="flex items-center">
+        <button
+          onClick={onSwitch}
+          className="min-h-[48px] rounded-sm px-3 text-[15px] text-primary underline"
+        >
+          {switchLabel}
+        </button>
+        {/* Not underlined and not primary: signing out is the one thing on this
+            screen a patient must not tap by accident reaching for the language. */}
+        <button
+          onClick={logout}
+          className="min-h-[48px] rounded-sm px-3 text-[15px] text-muted"
+        >
+          {signOutLabel}
+        </button>
+      </span>
     </header>
   );
 }
