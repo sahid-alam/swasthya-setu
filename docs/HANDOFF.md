@@ -10,7 +10,7 @@ ticked. Migrations are at `0006` — M5/M8 needed **no new migration**, the tabl
 already in `0001` from SCHEMA.md.
 
 - **200 backend tests, 18 frontend tests**, `make lint` clean, suite stable across repeat runs
-- `make demo-check` is **12/12** — the Iron Rule 4 guard; run it after anything touching the spine.
+- `make demo-check` is **12/12**, `make load-check` 30x inside budget, `make failure-drill` 8/8; — the Iron Rule 4 guard; run it after anything touching the spine.
   **It no longer needs a fresh `make seed`.** It used to target one fixed badge
   (`HP-DOC-1001`), drain him and leave him `ON_LEAVE`, so a second run found nobody to
   move and reported a broken spine that was fine. It now picks, from live data, the

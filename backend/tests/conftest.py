@@ -16,6 +16,7 @@ for _flag in (
     "EMAIL_MOCK_MODE",
     "WHATSAPP_MOCK_MODE",
     "OSRM_MOCK_MODE",  # never reach for an OSRM container in a test
+    "ERAKTKOSH_MOCK_MODE",  # never scrape a government portal from a test
 ):
     os.environ[_flag] = "true"
 

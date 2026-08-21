@@ -10,6 +10,7 @@ import Alerts from "./routes/Alerts";
 import Beds from "./routes/Beds";
 import Book from "./routes/Book";
 import GoldenHour from "./routes/GoldenHour";
+import Impact from "./routes/Impact";
 import NetworkMap from "./routes/NetworkMap";
 import Queues from "./routes/Queues";
 import Scenarios from "./routes/Scenarios";
@@ -46,6 +47,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/beds" element={<Beds />} />
             <Route path="/referrals" element={<Referrals />} />
             <Route path="/golden-hour" element={<GoldenHour />} />
+            <Route path="/impact" element={<Impact />} />
             <Route path="/scenarios" element={<Scenarios />} />
             <Route path="/events" element={<Dashboard />} />
             <Route path="/dev/ui" element={<DevUI />} />

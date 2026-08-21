@@ -102,3 +102,59 @@ export const createReferral = (body: {
   notes?: string;
 }) =>
   api<Referral>("/referrals", { method: "POST", body: JSON.stringify(body) });
+
+/* --- M6 blood, and the judge-facing evidence (impact + FCFS) ---------------- */
+
+export type Blood = {
+  hospital: string;
+  group: string;
+  component: string;
+  units: number;
+  as_of: string;
+  source: string;
+};
+
+export type Impact = {
+  patients_told: number;
+  told_in_time: number;
+  told_too_late: number;
+  told_in_time_pct: number;
+  median_notice_minutes: number | null;
+  still_pending: number;
+  replans: number;
+  fastest_replan_ms: number | null;
+  slowest_replan_ms: number | null;
+};
+
+export type FcfsArm = {
+  mean_displacement_min: number;
+  p90_displacement_min: number;
+  weighted_cost: number;
+  unplaced: number;
+  experienced_wait_min: number;
+};
+
+export type FcfsScenario = {
+  name: string;
+  seats_for_40_patients: number;
+  cpsat: FcfsArm;
+  fcfs: FcfsArm;
+  priority_mean_displacement: {
+    cpsat: Record<string, number>;
+    fcfs: Record<string, number>;
+  };
+};
+
+export type Fcfs = {
+  runs_per_scenario: number;
+  scenarios: FcfsScenario[];
+  honest_reading: string;
+};
+
+export const fetchBlood = () => api<Blood[]>("/blood");
+export const fetchImpact = () => api<Impact>("/metrics/impact");
+export const fetchFcfs = () => api<Fcfs>("/metrics/fcfs");
+
+/** Blood group as a person writes it: O_NEG -> O−. */
+export const bloodLabel = (g: string) =>
+  g.replace("_POS", "+").replace("_NEG", "−");

@@ -10,8 +10,9 @@ from __future__ import annotations
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime
 
-from app.models import Channel, NotificationStatus
+from app.models import BloodComponent, BloodGroup, BloodSource, Channel, NotificationStatus
 
 
 class AdapterError(Exception):
@@ -227,6 +228,33 @@ class RoutingAdapter(ABC):
         self, *, origin: tuple[float, float], destinations: list[tuple[uuid.UUID, float, float]]
     ) -> list[Leg]:
         """`origin` and each destination are (lat, lng) in WGS84."""
+
+    @abstractmethod
+    async def health(self) -> bool:
+        """Cheap reachability probe; must never raise."""
+
+
+@dataclass(frozen=True)
+class BloodReading:
+    """One group/component holding at one facility, at one moment."""
+
+    group: BloodGroup
+    component: BloodComponent
+    units: int
+    as_of: datetime
+    source: BloodSource
+
+
+class BloodAdapter(ABC):
+    """Blood stock for a facility — e-RaktKosh live, generated offline.
+
+    `source` rides on every reading rather than being decided by the caller, so a
+    generated number can never be stored as though it came from the government portal.
+    """
+
+    @abstractmethod
+    async def stock_for(self, *, hospital_code: str, scale: float = 1.0) -> list[BloodReading]:
+        """`scale` sizes a district hospital against a medical college."""
 
     @abstractmethod
     async def health(self) -> bool:

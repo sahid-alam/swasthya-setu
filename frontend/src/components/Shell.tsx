@@ -102,6 +102,15 @@ const NAV = [
     ),
   },
   {
+    to: "/impact",
+    label: "Impact",
+    icon: (
+      <Icon>
+        <path d="M3.5 16.5V9M8.5 16.5V4M13.5 16.5v-5M18 16.5h-16" />
+      </Icon>
+    ),
+  },
+  {
     to: "/scenarios",
     label: "Scenarios",
     icon: (

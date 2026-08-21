@@ -46,5 +46,8 @@ async def health() -> Health:
         # reportable, because a judge asking "are those real drive times?" gets
         # answered from this endpoint.
         mocks={c.value.lower(): mock_mode(c) for c in MOCKABLE}
-        | {"osrm": get_settings().osrm_mock_mode},
+        | {
+            "osrm": get_settings().osrm_mock_mode,
+            "eraktkosh": get_settings().eraktkosh_mock_mode,
+        },
     )

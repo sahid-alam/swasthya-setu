@@ -5,8 +5,14 @@ from __future__ import annotations
 
 from functools import cache
 
-from app.adapters.base import MessagingAdapter, RoutingAdapter, TelephonyAdapter
+from app.adapters.base import (
+    BloodAdapter,
+    MessagingAdapter,
+    RoutingAdapter,
+    TelephonyAdapter,
+)
 from app.adapters.email_mock import MockEmail
+from app.adapters.eraktkosh_mock import MockERaktKosh
 from app.adapters.ivr_mock import MockExotel
 from app.adapters.osrm_mock import MockOsrm
 from app.adapters.sms_mock import MockSms
@@ -83,3 +89,15 @@ def routing() -> RoutingAdapter:
     from app.adapters.osrm_real import Osrm  # imported only when actually used
 
     return Osrm()
+
+
+@cache
+def blood() -> BloodAdapter:
+    """Blood stock. Mock is generated and stamps every reading SYNTHETIC, and it is the
+    default: e-RaktKosh publishes no documented API and the demo cannot depend on a
+    government portal being up."""
+    if get_settings().eraktkosh_mock_mode:
+        return MockERaktKosh()
+    from app.adapters.eraktkosh_real import ERaktKosh  # imported only when actually used
+
+    return ERaktKosh()

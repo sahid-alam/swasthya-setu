@@ -73,6 +73,7 @@ choose one.
 | `/beds` | bed occupancy per ward (M5) |
 | `/referrals` | referral holds with a live expiry countdown (M5) |
 | `/golden-hour` | emergency facility ranking (M8) |
+| `/impact` | waiting avoided + the CP-SAT vs FCFS chart — the closing screen |
 | `/scenarios` | the presenter's remote control (admin only) |
 | `/events` | raw WebSocket feed, if a judge wants the plumbing |
 | `/patient` | patient sign-in by phone OTP |
@@ -492,6 +493,46 @@ come back. Point at the countdown on the row:
 If someone asks what happens on a race: confirming a hold that expired a second ago is
 refused, not resurrected. That bed may already belong to someone else.
 
+### 24. "So how much waiting did you actually remove?" — the closing number (60s)
+
+`/impact`. This is the screen to end on, because it answers the problem statement in
+its own words.
+
+> "Three hundred and thirty-four patients told their appointment moved. Every one of
+> them told *before* the slot they would have travelled to, with a median of three
+> hours' notice. That is the waiting we removed — not three minutes off a queue, a
+> journey not made."
+
+Then, before anyone asks, turn the chart around on yourself:
+
+> "And here is the part most teams would hide. Against first-come-first-served with
+> spare capacity, we do **not** reduce waiting. Twenty-three minutes against twenty-two
+> — we are marginally worse on the raw mean. What changes is *who* waits: a referred
+> patient waits zero minutes instead of twenty-five. In a busy department, which is
+> every real day in Himachal, mean displacement is seventy-two against a hundred and
+> forty-eight. The claim is that the right people wait less. Not that everyone does."
+
+That paragraph is on the screen, not just in your head — the API serves
+`honest_reading` alongside the numbers so it cannot drift from them.
+
+Point at the fourth tile last:
+
+> "Fifty-eight patients are still owed a seat. We show that next to the headline rather
+> than under it."
+
+### 25. Two drills you run before the room, not in it (30s)
+
+```bash
+make load-check      # every doctor in the network replanned; worst case reported
+make failure-drill   # stops Redis, proves bookings survive, restarts it
+```
+
+> "Load: thirty replans across three hospitals, worst case a hundred and sixty-six
+> milliseconds against a five-second budget — thirty times inside it. And we kill Redis
+> on purpose: the board stops streaming and says so, but the presence data, the clinic
+> lists, the beds and the emergency ranking all keep serving, because the clinical data
+> is in Postgres and Redis was never in that path."
+
 ## Optional: a whole day in two minutes
 
 ```bash
@@ -514,15 +555,18 @@ means every rehearsal is identical.
 | WhatsApp replies loop back to the menu | The session TTL expired between turns. `wa book` and walk it again. |
 | `InvalidCachedStatementError` | You ran a migration against a live backend. Restart uvicorn. |
 | Beds screen empty | `make seed-facilities`. It is additive — running it twice is a no-op. |
+| Blood table empty | `make ingest-blood` (mock by default, writes SYNTHETIC). |
+| `/impact` chart missing | `python ml/compare_fcfs.py` to rebuild the artifact. |
 | Anything at all, before you present | `make demo-check`. **12/12** or do not start. It no longer needs a re-seed first. |
 
 ## What is NOT built yet (say so if asked)
 
 Phase 1 is complete. Bed management, referral reservation and the Golden Hour router
 (§21–§23) are built. Still untouched: Bhashini voice booking, outbound TTS reschedule
-calls, the kiosk skin, the **e-RaktKosh ingest** (blood stock is seeded SYNTHETIC and
-every row says so), the Prophet footfall forecast, and the ABDM/eSanjeevani/108/
-e-Hospital adapter backbone. The **OSRM container is not built** either — see §22.
+calls, the kiosk skin, the Prophet footfall forecast, and the ABDM/eSanjeevani/108/
+e-Hospital adapter backbone. The **OSRM container is not built** — see §22 — and the
+e-RaktKosh adapter exists but **runs in mock mode**, so every blood figure on screen is
+generated and labelled SYNTHETIC.
 
 A "surge" scenario (§20) is the remaining gap inside Phase 1. `make dev` (docker compose) is verified and 8/8, but **present from
 `dev-local`** — it starts in seconds, and it is what this runbook describes and what was

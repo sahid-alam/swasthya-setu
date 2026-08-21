@@ -8,9 +8,15 @@ import {
   Eyebrow,
   Panel,
   Row,
+  SimulatedChip,
   TableShell,
 } from "../components/ui";
-import { fetchOccupancy, type Ward } from "../lib/facilities";
+import {
+  bloodLabel,
+  fetchBlood,
+  fetchOccupancy,
+  type Ward,
+} from "../lib/facilities";
 
 /** Bed occupancy — PRD §M5, DESIGN.md §9a (command centre: density is fine here).
  *  Counts come straight from `beds.state`, so this and the Golden Hour ranking can
@@ -50,6 +56,98 @@ function OccupancyBar({ ward }: { ward: Ward }) {
         );
       })}
     </span>
+  );
+}
+
+/** Blood stock — PRD §M6. Every row carries its own `source`, so the chip below is
+ *  read from the data rather than hard-coded: the day a real e-RaktKosh ingest runs
+ *  (`make ingest-blood` with ERAKTKOSH_MOCK_MODE=false) this label changes by itself. */
+function BloodPanel() {
+  const { data: stock = [] } = useQuery({
+    queryKey: ["blood"],
+    queryFn: fetchBlood,
+    refetchInterval: 60_000,
+  });
+  if (!stock.length) return null;
+
+  const byHospital = new Map<string, Map<string, number>>();
+  for (const row of stock) {
+    const groups = byHospital.get(row.hospital) ?? new Map<string, number>();
+    groups.set(row.group, (groups.get(row.group) ?? 0) + row.units);
+    byHospital.set(row.hospital, groups);
+  }
+  const groups = [...new Set(stock.map((s) => s.group))].sort();
+  const synthetic = stock.every((s) => s.source === "SYNTHETIC");
+  const asOf = stock[0]?.as_of;
+
+  return (
+    <section
+      className="fade-up mt-9"
+      style={{ ["--delay" as string]: "160ms" }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Eyebrow dash>Blood stock</Eyebrow>
+        <SimulatedChip
+          label={
+            synthetic
+              ? "SYNTHETIC DATA — generated, not from e-RaktKosh"
+              : `e-RaktKosh · ${asOf ? new Date(asOf).toLocaleString() : ""}`
+          }
+        />
+      </div>
+      <div className="mt-3 hidden md:block">
+        <TableShell
+          columns={["Hospital", ...groups.map(bloodLabel)]}
+          footer="Whole blood + packed red cells, units on hand"
+        >
+          {[...byHospital.entries()].map(([hospital, held]) => (
+            <Row key={hospital}>
+              <Cell>{hospital}</Cell>
+              {groups.map((g) => {
+                const units = held.get(g) ?? 0;
+                return (
+                  <Cell key={g}>
+                    {/* Scarcity is the point: zero units of a group is the thing a
+                        Golden Hour ranking needs someone to notice. */}
+                    <Chip
+                      tone={
+                        units === 0 ? "danger" : units < 4 ? "warn" : "success"
+                      }
+                    >
+                      <span className="live-state tnum">{units}</span>
+                    </Chip>
+                  </Cell>
+                );
+              })}
+            </Row>
+          ))}
+        </TableShell>
+      </div>
+      <div className="mt-3 grid gap-2 md:hidden">
+        {[...byHospital.entries()].map(([hospital, held]) => (
+          <Panel key={hospital} className="p-4">
+            <p className="text-[15px] font-medium">{hospital}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {groups.map((g) => {
+                const units = held.get(g) ?? 0;
+                return (
+                  <Chip
+                    key={g}
+                    tone={
+                      units === 0 ? "danger" : units < 4 ? "warn" : "success"
+                    }
+                  >
+                    <span className="live-state tnum">
+                      {bloodLabel(g)} {units}
+                    </span>
+                  </Chip>
+                );
+              })}
+            </div>
+          </Panel>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -184,6 +282,8 @@ export default function Beds() {
           </div>
         </section>
       ))}
+
+      <BloodPanel />
 
       {!isLoading && wards.length === 0 && (
         <Panel className="mt-8 p-8 text-center text-[15px] text-muted">

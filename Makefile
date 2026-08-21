@@ -1,4 +1,4 @@
-.PHONY: install bootstrap-local dev dev-local migrate seed seed-facilities demo demo-check test lint train tunnel sms-probe
+.PHONY: install bootstrap-local dev dev-local migrate seed seed-facilities ingest-blood load-check failure-drill demo demo-check test lint train tunnel sms-probe
 
 # From a clean checkout, with postgres + redis running:
 #   make install bootstrap-local migrate seed test
@@ -30,6 +30,9 @@ seed:
 seed-facilities:  ## beds + blood stock — additive, never truncates patients
 	cd backend && .venv/bin/python -m app.seed_facilities
 
+ingest-blood:  ## refresh blood stock through the e-RaktKosh adapter (mock by default)
+	cd backend && .venv/bin/python -m app.ingest_blood
+
 train:             ## retrain ML artifacts (downloads the 110k dataset on first run)
 	cd backend && .venv/bin/python ../ml/train_noshow.py
 	cd backend && .venv/bin/python ../ml/train_wait.py
@@ -43,6 +46,12 @@ sms-probe:         ## check the phone gateway; --send for ONE real message
 
 tunnel:            ## publish the local backend for Vapi and re-point the assistant
 	bash infra/tunnel.sh
+
+failure-drill:  ## stop Redis, prove bookings survive, restart it
+	backend/.venv/bin/python infra/failure_drill.py
+
+load-check:  ## replan every doctor in the network, report the worst case
+	backend/.venv/bin/python infra/load_check.py
 
 demo-check:        ## Iron Rule 4 guard: walk the spine against a running stack
 	backend/.venv/bin/python infra/demo_check.py

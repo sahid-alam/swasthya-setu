@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     email_mock_mode: bool = True  # false needs the SMTP_* block below
     telegram_mock_mode: bool = True  # false needs TELEGRAM_BOT_TOKEN
     osrm_mock_mode: bool = True  # false needs OSRM_BASE_URL (M8 Golden Hour)
+    eraktkosh_mock_mode: bool = True  # false needs ERAKTKOSH_BASE_URL (M6 blood)
 
     # Only read when sms_mock_mode is false: an Android running the Traccar SMS
     # Gateway app, reachable on the LAN (never localhost from inside compose).
@@ -121,6 +122,10 @@ class Settings(BaseSettings):
     # talk, it just cannot book (Iron Rule 4: the IVR path still books with no internet).
     # Only read when osrm_mock_mode is false: an OSRM carrying an HP road extract.
     osrm_base_url: str = ""
+
+    # Only read when eraktkosh_mock_mode is false. The portal publishes no
+    # documented API — see adapters/eraktkosh_real.py before switching this on.
+    eraktkosh_base_url: str = "https://www.eraktkosh.mohfw.gov.in"
 
     public_base_url: str = ""
     # Vapi sends this on every tool call; without it the endpoint refuses to be wired.
