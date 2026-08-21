@@ -36,21 +36,24 @@ export default function Queues() {
   );
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
       <header className="fade-up">
         <Eyebrow dash>Command Center</Eyebrow>
-        <h1 className="mt-3 text-[44px] leading-[0.98] tracking-[-0.04em]">
+        <h1 className="mt-3 text-[34px] leading-[0.98] tracking-[-0.04em] sm:text-[44px]">
           Live <span className="font-normal italic text-primary">queues</span>
         </h1>
       </header>
 
       <section className="fade-up mt-6 flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-3">
+        {/* min-w-0 + max-w-full: a select sizes itself to its longest option, and
+            "General Medicine — Indira Gandhi Medical College (12)" was dragging the
+            whole document 199px sideways on a phone. */}
+        <label className="flex w-full min-w-0 flex-col gap-1.5 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
           <Eyebrow>Department</Eyebrow>
           <select
             value={dept}
             onChange={(e) => setDept(e.target.value)}
-            className="min-h-[40px] rounded-sm border border-line bg-surface px-3 text-[15px]"
+            className="min-h-[40px] w-full min-w-0 max-w-full truncate rounded-sm border border-line bg-surface px-3 text-[15px] sm:w-auto"
           >
             {departments.map((d) => (
               <option key={d.id} value={d.id}>

@@ -64,11 +64,11 @@ export default function PresenceBoard() {
   }, [rows]);
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
       <header className="fade-up flex flex-wrap items-end justify-between gap-4">
         <div>
           <Eyebrow dash>Command Center</Eyebrow>
-          <h1 className="mt-3 text-[44px] leading-[0.98] tracking-[-0.04em]">
+          <h1 className="mt-3 text-[34px] leading-[0.98] tracking-[-0.04em] sm:text-[44px]">
             Doctor{" "}
             <span className="font-normal italic text-primary">presence</span>
           </h1>
@@ -126,7 +126,7 @@ export default function PresenceBoard() {
                   <Cell mono>{row.zone_code ?? "—"}</Cell>
                   <Cell>
                     <button
-                      className="text-[13px] text-primary underline"
+                      className="-mx-2 min-h-[40px] rounded-sm px-2 text-[13px] text-primary underline"
                       onClick={() =>
                         setOpenDoctor(
                           openDoctor === row.doctor_id ? null : row.doctor_id,

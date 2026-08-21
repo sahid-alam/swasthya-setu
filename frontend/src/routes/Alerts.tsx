@@ -35,7 +35,7 @@ export default function Alerts() {
       <header className="fade-up flex flex-wrap items-end justify-between gap-4">
         <div>
           <Eyebrow dash>Command Center</Eyebrow>
-          <h1 className="mt-3 text-[44px] leading-[0.98] tracking-[-0.04em]">
+          <h1 className="mt-3 text-[34px] leading-[0.98] tracking-[-0.04em] sm:text-[44px]">
             What needs{" "}
             <span className="font-normal italic text-primary">attention</span>
           </h1>

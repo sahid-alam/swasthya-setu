@@ -228,6 +228,46 @@ export function PresenceChip({
   );
 }
 
+/* §9d bed vocabulary: FREE=success · OCCUPIED=neutral-ink · RESERVED=info ·
+   CLEANING=warn · OOO=danger. Named here so no screen re-decides what a state means. */
+export const BED_TONE: Record<string, ChipTone> = {
+  FREE: "success",
+  OCCUPIED: "neutral",
+  RESERVED: "info",
+  CLEANING: "warn",
+  OOO: "danger",
+};
+
+/* §9d referrals: REQUESTED=neutral · RESERVED=info · CONFIRMED=success ·
+   EXPIRED=warn · CANCELLED=danger. ARRIVED is the happy end of the same road. */
+export const REFERRAL_TONE: Record<string, ChipTone> = {
+  REQUESTED: "neutral",
+  RESERVED: "info",
+  CONFIRMED: "success",
+  ARRIVED: "success",
+  EXPIRED: "warn",
+  CANCELLED: "danger",
+};
+
+export function StatusChip({
+  state,
+  tones,
+  pulse = false,
+}: {
+  state: string;
+  tones: Record<string, ChipTone>;
+  pulse?: boolean;
+}) {
+  return (
+    <Chip tone={tones[state] ?? "neutral"} pulse={pulse}>
+      {/* §9a projector rule: a judge reads this from ~3m */}
+      <span className="live-state capitalize">
+        {state.replace(/_/g, " ").toLowerCase()}
+      </span>
+    </Chip>
+  );
+}
+
 /** Honesty is a design feature (§9d): anything mock or generated says so. */
 export function SimulatedChip({ label = "SIMULATED" }: { label?: string }) {
   return (

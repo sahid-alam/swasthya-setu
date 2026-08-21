@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { logout } from "../lib/api";
 
@@ -72,6 +72,36 @@ const NAV = [
     ),
   },
   {
+    to: "/beds",
+    label: "Beds",
+    icon: (
+      <Icon>
+        <path d="M3 15.5V6M3 15.5h14M17 15.5v-4a2 2 0 0 0-2-2H8.5v6" />
+        <circle cx="6" cy="9" r="1.6" />
+      </Icon>
+    ),
+  },
+  {
+    to: "/referrals",
+    label: "Referrals",
+    icon: (
+      <Icon>
+        <path d="M3.5 6.5h9M9.5 3.5l3 3-3 3" />
+        <path d="M16.5 13.5h-9M10.5 10.5l-3 3 3 3" />
+      </Icon>
+    ),
+  },
+  {
+    to: "/golden-hour",
+    label: "Golden Hour",
+    icon: (
+      <Icon>
+        <circle cx="10" cy="10" r="6.8" />
+        <path d="M10 6v4.2l2.8 1.7" />
+      </Icon>
+    ),
+  },
+  {
     to: "/scenarios",
     label: "Scenarios",
     icon: (
@@ -83,18 +113,27 @@ const NAV = [
   },
 ];
 
+const cx = (...parts: (string | false)[]) => parts.filter(Boolean).join(" ");
+
 export default function Shell() {
+  const [open, setOpen] = useState(false);
+
   return (
     <div className="min-h-screen">
       {/* No `grain` here: DESIGN.md §4 asks for film grain on dark surfaces, but at
           the specified opacity over the dock it reads as noise rather than film. */}
-      <nav className="dock" aria-label="Command centre">
+      <nav
+        className="dock"
+        data-open={open || undefined}
+        aria-label="Command centre"
+      >
         <ul className="flex h-full flex-col gap-1 p-3">
           {NAV.map((item) => (
             <li key={item.to}>
               <NavLink
                 to={item.to}
                 end={item.to === "/"}
+                onClick={() => setOpen(false)}
                 className="dock-item flex min-h-[44px] items-center gap-3 rounded-md px-3"
               >
                 {item.icon}
@@ -118,8 +157,33 @@ export default function Shell() {
           </li>
         </ul>
       </nav>
-      {/* 68px dock + 16px inset either side */}
-      <div className="pl-[100px]">
+
+      {/* Below lg the dock is off-canvas and this is how it comes back. A hover-to-
+          expand rail has no meaning on a touch screen, and the 100px gutter it reserved
+          was eating a third of a phone. */}
+      <button
+        onClick={() => setOpen(true)}
+        aria-label="Open navigation"
+        aria-expanded={open}
+        className="fixed left-4 top-4 z-30 grid h-12 w-12 place-items-center rounded-md border border-line bg-surface shadow-2 lg:hidden"
+      >
+        <Icon>
+          <path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" />
+        </Icon>
+      </button>
+
+      {/* Scrim: closes on tap, and stays out of the tree for pointers when shut. */}
+      <div
+        onClick={() => setOpen(false)}
+        aria-hidden
+        className={cx(
+          "fixed inset-0 z-30 bg-ink/50 transition-opacity duration-300 lg:hidden",
+          open ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+      />
+
+      {/* 68px dock + 16px inset either side — but only once there is room for it. */}
+      <div className="pt-20 lg:pl-[100px] lg:pt-0">
         <Outlet />
       </div>
     </div>

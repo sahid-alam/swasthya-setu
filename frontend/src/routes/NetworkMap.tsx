@@ -91,10 +91,10 @@ export default function NetworkMap() {
   }, [facilities]);
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
       <header className="fade-up">
         <Eyebrow dash>Command Center</Eyebrow>
-        <h1 className="mt-3 text-[44px] leading-[0.98] tracking-[-0.04em]">
+        <h1 className="mt-3 text-[34px] leading-[0.98] tracking-[-0.04em] sm:text-[44px]">
           Facility{" "}
           <span className="font-normal italic text-primary">network</span>
         </h1>

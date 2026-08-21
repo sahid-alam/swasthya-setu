@@ -7,11 +7,14 @@ import { getToken } from "./lib/api";
 import Dashboard from "./routes/Dashboard";
 import Shell from "./components/Shell";
 import Alerts from "./routes/Alerts";
+import Beds from "./routes/Beds";
 import Book from "./routes/Book";
+import GoldenHour from "./routes/GoldenHour";
 import NetworkMap from "./routes/NetworkMap";
 import Queues from "./routes/Queues";
 import Scenarios from "./routes/Scenarios";
 import PresenceBoard from "./routes/PresenceBoard";
+import Referrals from "./routes/Referrals";
 import DevUI from "./routes/DevUI";
 import Login from "./routes/Login";
 import MyQueue from "./routes/MyQueue";
@@ -40,6 +43,9 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/queue" element={<Queues />} />
             <Route path="/alerts" element={<Alerts />} />
             <Route path="/map" element={<NetworkMap />} />
+            <Route path="/beds" element={<Beds />} />
+            <Route path="/referrals" element={<Referrals />} />
+            <Route path="/golden-hour" element={<GoldenHour />} />
             <Route path="/scenarios" element={<Scenarios />} />
             <Route path="/events" element={<Dashboard />} />
             <Route path="/dev/ui" element={<DevUI />} />

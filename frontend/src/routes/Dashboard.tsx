@@ -37,7 +37,7 @@ export default function Dashboard() {
       <header className="fade-up flex items-end justify-between">
         <div>
           <Eyebrow dash>Command Center</Eyebrow>
-          <h1 className="mt-3 text-[44px] leading-[0.98] tracking-[-0.04em]">
+          <h1 className="mt-3 text-[34px] leading-[0.98] tracking-[-0.04em] sm:text-[44px]">
             Live <span className="font-normal italic text-primary">signal</span>{" "}
             feed
           </h1>

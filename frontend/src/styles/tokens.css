@@ -239,6 +239,35 @@ body {
   width: 220px;
 }
 
+/* Below the lg breakpoint the rail is off-canvas. Hover-to-expand has no meaning on a
+   touch screen, and the 100px gutter it reserved was eating a third of a phone — so on
+   small screens it becomes a labelled drawer that a menu button slides in. */
+@media (max-width: 1023px) {
+  .dock {
+    width: 260px;
+    transform: translateX(calc(-100% - 24px));
+    transition:
+      transform 300ms var(--ease-default),
+      width 300ms var(--ease-default);
+    z-index: 40;
+  }
+
+  .dock[data-open] {
+    transform: none;
+  }
+
+  /* No hover on touch, so the labels are simply always there. */
+  .dock:hover,
+  .dock:focus-within {
+    width: 260px;
+  }
+
+  .dock .dock-label {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .dock-label {
   opacity: 0;
   transform: translateX(-4px);
@@ -290,5 +319,20 @@ body {
   .fade-up,
   .modal-in {
     animation: none;
+  }
+}
+
+/* Leaflet ships 30px zoom controls. On a touch screen that is under any reasonable
+   tap target, and the map is the one place on the command centre a phone user pans
+   and zooms by hand. The attribution link stays as Leaflet sets it — it is required
+   credit, not a control. */
+@media (pointer: coarse) {
+  /* Matches Leaflet's own `.leaflet-touch .leaflet-bar a` specificity — a bare
+     `.leaflet-bar a` loses to it and silently does nothing. */
+  .leaflet-touch .leaflet-bar a,
+  .leaflet-container .leaflet-bar a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
   }
 }
