@@ -6,6 +6,7 @@ import {
   Cell,
   Chip,
   Eyebrow,
+  Kinetic,
   Panel,
   REFERRAL_TONE,
   Row,
@@ -46,7 +47,7 @@ function Countdown({ referral }: { referral: Referral }) {
   }, [referral.status]);
 
   if (referral.status !== "RESERVED")
-    return <span className="text-muted-2">—</span>;
+    return <span className="text-muted">—</span>;
   const left = timeLeft(referral.expires_at);
   if (!left) {
     // Elapsed on screen but the sweeper has not run yet. Say that, rather than showing
@@ -245,7 +246,7 @@ function Segmented({
           key={key}
           onClick={() => onChange(key)}
           className={
-            "min-h-[36px] whitespace-nowrap rounded-full px-4 text-[13px] font-medium transition-colors " +
+            "min-h-[40px] whitespace-nowrap rounded-full px-4 text-[13px] font-medium transition-colors " +
             (value === key ? "bg-ink text-white" : "text-muted hover:text-ink")
           }
         >
@@ -301,10 +302,7 @@ export default function Referrals() {
         <div>
           <Eyebrow dash>Command Center</Eyebrow>
           <h1 className="mt-3 text-[34px] leading-[0.98] tracking-[-0.04em] sm:text-[44px]">
-            Referral{" "}
-            <span className="font-normal italic text-primary">
-              reservations
-            </span>
+            <Kinetic lead="Referral" accent="reservations" />
           </h1>
         </div>
         <Chip tone={holding ? "info" : "neutral"}>

@@ -6,6 +6,7 @@ import {
   Cell,
   Chip,
   Eyebrow,
+  Kinetic,
   Panel,
   Row,
   SimulatedChip,
@@ -191,8 +192,7 @@ export default function Beds() {
         <div>
           <Eyebrow dash>Command Center</Eyebrow>
           <h1 className="mt-3 text-[34px] leading-[0.98] tracking-[-0.04em] sm:text-[44px]">
-            Bed{" "}
-            <span className="font-normal italic text-primary">occupancy</span>
+            <Kinetic lead="Bed" accent="occupancy" />
           </h1>
         </div>
         <Chip tone={totals.free > 0 ? "success" : "danger"}>

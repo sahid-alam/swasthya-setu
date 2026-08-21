@@ -5,6 +5,7 @@ import {
   Cell,
   Chip,
   Eyebrow,
+  Kinetic,
   Panel,
   PresenceChip,
   Row,
@@ -69,8 +70,7 @@ export default function PresenceBoard() {
         <div>
           <Eyebrow dash>Command Center</Eyebrow>
           <h1 className="mt-3 text-[34px] leading-[0.98] tracking-[-0.04em] sm:text-[44px]">
-            Doctor{" "}
-            <span className="font-normal italic text-primary">presence</span>
+            <Kinetic lead="Doctor" accent="presence" />
           </h1>
         </div>
         <Chip tone={live ? "success" : "neutral"} pulse={live}>

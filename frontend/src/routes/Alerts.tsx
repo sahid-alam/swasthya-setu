@@ -87,7 +87,7 @@ export default function Alerts() {
               <div className="text-right text-[13px] text-muted">
                 <div>{a.hospital}</div>
                 {a.department && (
-                  <div className="text-muted-2">{a.department}</div>
+                  <div className="text-muted">{a.department}</div>
                 )}
               </div>
             </Panel>

@@ -69,6 +69,33 @@ export function PwaHeader({
   );
 }
 
+/* --- Kinetic headline (§5, §9a) -------------------------------------------
+   Every command-centre landing uses the same shape: plain words, then one word
+   italicised in primary. Taking them as separate props keeps that rule in one place
+   instead of each screen re-deciding which word to accent. */
+
+export function Kinetic({ lead, accent }: { lead: string; accent: string }) {
+  const words = [
+    ...lead.split(" ").map((w) => [w, false] as const),
+    [accent, true] as const,
+  ];
+  return (
+    <span className="kinetic">
+      {words.map(([word, italic], i) => (
+        <span key={`${word}-${i}`}>
+          <span
+            style={{ ["--d" as string]: `${i * 90}ms` }}
+            className={italic ? "font-normal italic text-primary" : undefined}
+          >
+            {word}
+          </span>
+          {i < words.length - 1 ? "\u00A0" : ""}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /* --- Panel (§4) ----------------------------------------------------------- */
 
 export function Panel({
@@ -214,13 +241,13 @@ export function PresenceChip({
         <span className="live-state capitalize">{label}</span>
       </Chip>
       {degraded && (
-        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-2">
+        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
           roster only
         </span>
       )}
       {/* low confidence is shown, never hidden behind an optimistic colour (§9d) */}
       {confidence !== undefined && confidence < 0.6 && (
-        <span className="tnum text-[11px] text-muted-2">
+        <span className="tnum text-[11px] text-muted">
           {Math.round(confidence * 100)}%
         </span>
       )}

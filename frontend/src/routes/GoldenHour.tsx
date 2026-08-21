@@ -3,7 +3,14 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState } from "react";
 
-import { Button, Chip, Eyebrow, Panel, SimulatedChip } from "../components/ui";
+import {
+  Button,
+  Chip,
+  Eyebrow,
+  Kinetic,
+  Panel,
+  SimulatedChip,
+} from "../components/ui";
 import { rankEmergency, type Ranked, type Ranking } from "../lib/facilities";
 
 /** Golden Hour Router — PRD §M8, DESIGN.md §9a.
@@ -156,7 +163,7 @@ export default function GoldenHour() {
         <div>
           <Eyebrow dash>Command Center</Eyebrow>
           <h1 className="mt-3 text-[34px] leading-[0.98] tracking-[-0.04em] sm:text-[44px]">
-            Golden <span className="font-normal italic text-primary">hour</span>
+            <Kinetic lead="Golden" accent="hour" />
           </h1>
         </div>
         {/* Said on the screen, not just in the code: this is not a dispatch system. */}
@@ -240,7 +247,7 @@ export default function GoldenHour() {
               <Panel key={r.hospital_id} className="p-4 sm:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span className="flex items-center gap-3">
-                    <span className="num-hero text-[24px] font-medium text-muted-2">
+                    <span className="num-hero text-[24px] font-medium text-muted">
                       {r.rank}
                     </span>
                     <span className="text-[17px] font-semibold tracking-[-0.01em]">

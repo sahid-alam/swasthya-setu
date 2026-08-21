@@ -7,6 +7,7 @@ import {
   Cell,
   Chip,
   Eyebrow,
+  Kinetic,
   Panel,
   Row,
   SimulatedChip,
@@ -95,8 +96,7 @@ export default function NetworkMap() {
       <header className="fade-up">
         <Eyebrow dash>Command Center</Eyebrow>
         <h1 className="mt-3 text-[34px] leading-[0.98] tracking-[-0.04em] sm:text-[44px]">
-          Facility{" "}
-          <span className="font-normal italic text-primary">network</span>
+          <Kinetic lead="Facility" accent="network" />
         </h1>
       </header>
 
@@ -139,7 +139,7 @@ export default function NetworkMap() {
               <Cell mono>{f.waiting}</Cell>
               <Cell>
                 {f.alerts === 0 ? (
-                  <span className="text-muted-2">—</span>
+                  <span className="text-muted">—</span>
                 ) : (
                   <Chip tone={SEVERITY_TONE[f.worst_severity ?? "info"]}>
                     <span className="live-state">{f.alerts}</span>

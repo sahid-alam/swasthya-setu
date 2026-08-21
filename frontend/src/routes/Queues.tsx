@@ -1,7 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { Cell, Chip, Eyebrow, Panel, Row, TableShell } from "../components/ui";
+import {
+  Cell,
+  Chip,
+  Eyebrow,
+  Kinetic,
+  Panel,
+  Row,
+  TableShell,
+} from "../components/ui";
 import { fetchDepartments, fetchQueue } from "../lib/command";
 
 /** Queue view with predicted waits — PRD §M4. The prediction is per queue position,
@@ -40,7 +48,7 @@ export default function Queues() {
       <header className="fade-up">
         <Eyebrow dash>Command Center</Eyebrow>
         <h1 className="mt-3 text-[34px] leading-[0.98] tracking-[-0.04em] sm:text-[44px]">
-          Live <span className="font-normal italic text-primary">queues</span>
+          <Kinetic lead="Live" accent="queues" />
         </h1>
       </header>
 
@@ -130,7 +138,7 @@ export default function Queues() {
                 </Cell>
                 <Cell>
                   {e.noshow_prob === null ? (
-                    <span className="text-muted-2">—</span>
+                    <span className="text-muted">—</span>
                   ) : (
                     <span className="tnum">
                       {Math.round(e.noshow_prob * 100)}%

@@ -230,7 +230,22 @@ through the PWA's own queue endpoint, not a rendered screen — see 1C below.
   clinic list, bed occupancy and Golden Hour ranking all still serve, because the
   clinical data is in Postgres and Redis is not in that path. Always restarts Redis in a
   `finally` — a drill that leaves a presenter's Redis down is worse than no drill.
-- [ ] UI polish pass on Tier 1 screens against `docs/DESIGN.md`: command-center flair (dark dock sidebar, veil transition, grain, kinetic headlines) per §9a; verify PWA/kiosk have NO heavy effects per §9b/§9c; audit every screen for raw hexes vs tokens and 3m projector legibility of live-state text
+- [~] UI polish pass on Tier 1 screens against `docs/DESIGN.md` — mostly done.
+  **Done:** dark dock (with an authored 20x20 icon set — the Unicode glyphs it shipped
+  with inherited the text face and never aligned); **kinetic headlines** on all seven
+  command-centre landings, words clipped and rising on a 90 ms stagger, opacity-only
+  under `prefers-reduced-motion`; §9b/§9c verified flair-free (the PWA has no blur, veil,
+  grain or cursor, and the Vapi SDK only downloads if tapped); raw-hex audit clean
+  (2 `#fff` left, inside a Leaflet marker string); responsive pass across every screen.
+  **Contrast fixed, and it was a real defect:** `--muted-2` is **2.60:1** on white —
+  below the 4.5 AA body floor and below even the 3.0 large-text floor — and it was
+  carrying confidence percentages, department names and chart legends on the surface
+  §9a says judges read from 3 m. All 9 informational uses moved to `--muted` (4.64:1);
+  the token is now documented as hairlines-and-dots only.
+  **Not done, deliberately:** the §4 film grain (removed at the owner's call — at the
+  specified opacity over a 68px dock it reads as noise, not film) and the §5 **veil
+  transition**, which is the one remaining §9a signature. DESIGN.md §4 still mandates
+  grain, so the doc and the code disagree until that is settled.
 
 ---
 

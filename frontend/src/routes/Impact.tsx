@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { Chip, Eyebrow, Panel, SimulatedChip } from "../components/ui";
+import { Chip, Eyebrow, Kinetic, Panel, SimulatedChip } from "../components/ui";
 import { fetchFcfs, fetchImpact, type FcfsScenario } from "../lib/facilities";
 
 /** The evidence screen — DESIGN.md §9a.
@@ -45,9 +45,7 @@ function Bar({
           ] as const
         ).map(([name, value, colour]) => (
           <div key={name} className="flex items-center gap-2">
-            <span className="w-10 shrink-0 text-[12px] text-muted-2">
-              {name}
-            </span>
+            <span className="w-10 shrink-0 text-[12px] text-muted">{name}</span>
             <span
               className="h-4 min-w-[2px] rounded-xs"
               style={{
@@ -163,8 +161,7 @@ export default function Impact() {
       <header className="fade-up">
         <Eyebrow dash>Command Center</Eyebrow>
         <h1 className="mt-3 text-[34px] leading-[0.98] tracking-[-0.04em] sm:text-[44px]">
-          Waiting{" "}
-          <span className="font-normal italic text-primary">avoided</span>
+          <Kinetic lead="Waiting" accent="avoided" />
         </h1>
       </header>
 

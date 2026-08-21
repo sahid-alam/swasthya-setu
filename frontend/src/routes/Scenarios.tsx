@@ -118,9 +118,7 @@ export default function Scenarios() {
           <ul className="mt-3 grid gap-1.5">
             {log.map((entry, i) => (
               <li key={i} className="flex gap-3 text-[15px]">
-                <span className="tnum text-[12px] text-muted-2">
-                  {entry.at}
-                </span>
+                <span className="tnum text-[12px] text-muted">{entry.at}</span>
                 <span className={entry.bad ? "text-danger" : ""}>
                   {entry.text}
                 </span>
